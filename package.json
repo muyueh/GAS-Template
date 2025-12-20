@@ -1,0 +1,28 @@
+{
+  "name": "gas-template-repo",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Google Apps Script template repo (TypeScript + JSDoc + CI/CD via clasp)",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "clean": "node scripts/clean.mjs",
+    "lint": "eslint .",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "build": "node scripts/build.mjs",
+    "check": "npm run lint && npm run typecheck && npm run build",
+    "deploy": "npm run build && npx clasp push -f",
+    "clasp:status": "npx clasp login --status"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.39.2",
+    "@google/clasp": "^3.1.3",
+    "@types/google-apps-script": "^2.0.8",
+    "eslint": "^9.39.2",
+    "eslint-plugin-jsdoc": "^61.5.0",
+    "esbuild": "^0.27.2",
+    "typescript": "^5.9.3",
+    "typescript-eslint": "^8.49.0"
+  }
+}

@@ -1,0 +1,44 @@
+## EmbeddedScatterChartBuilder
+
+### Methods
+
+- addRange(range) — EmbeddedChartBuilder
+- asAreaChart() — EmbeddedAreaChartBuilder
+- asBarChart() — EmbeddedBarChartBuilder
+- asColumnChart() — EmbeddedColumnChartBuilder
+- asComboChart() — EmbeddedComboChartBuilder
+- asHistogramChart() — EmbeddedHistogramChartBuilder
+- asLineChart() — EmbeddedLineChartBuilder
+- asPieChart() — EmbeddedPieChartBuilder
+- asScatterChart() — EmbeddedScatterChartBuilder
+- asTableChart() — EmbeddedTableChartBuilder
+- build() — EmbeddedChart
+- clearRanges() — EmbeddedChartBuilder
+- getChartType() — ChartType
+- getContainer() — ContainerInfo
+- getRanges() — Range[]
+- removeRange(range) — EmbeddedChartBuilder
+- setBackgroundColor(cssValue) — EmbeddedScatterChartBuilder
+- setChartType(type) — EmbeddedChartBuilder
+- setColors(cssValues) — EmbeddedScatterChartBuilder
+- setHiddenDimensionStrategy(strategy) — EmbeddedChartBuilder
+- setLegendPosition(position) — EmbeddedScatterChartBuilder
+- setLegendTextStyle(textStyle) — EmbeddedScatterChartBuilder
+- setMergeStrategy(mergeStrategy) — EmbeddedChartBuilder
+- setNumHeaders(headers) — EmbeddedChartBuilder
+- setOption(option, value) — EmbeddedChartBuilder
+- setPointStyle(style) — EmbeddedScatterChartBuilder
+- setPosition(anchorRowPos, anchorColPos, offsetX, offsetY) — EmbeddedChartBuilder
+- setTitle(chartTitle) — EmbeddedScatterChartBuilder
+- setTitleTextStyle(textStyle) — EmbeddedScatterChartBuilder
+- setTransposeRowsAndColumns(transpose) — EmbeddedChartBuilder
+- setXAxisLogScale() — EmbeddedScatterChartBuilder
+- setXAxisRange(start, end) — EmbeddedScatterChartBuilder
+- setXAxisTextStyle(textStyle) — EmbeddedScatterChartBuilder
+- setXAxisTitle(title) — EmbeddedScatterChartBuilder
+- setXAxisTitleTextStyle(textStyle) — EmbeddedScatterChartBuilder
+- setYAxisLogScale() — EmbeddedScatterChartBuilder
+- setYAxisRange(start, end) — EmbeddedScatterChartBuilder
+- setYAxisTextStyle(textStyle) — EmbeddedScatterChartBuilder
+- setYAxisTitle(title) — EmbeddedScatterChartBuilder
+- setYAxisTitleTextStyle(textStyle) — EmbeddedScatterChartBuilder

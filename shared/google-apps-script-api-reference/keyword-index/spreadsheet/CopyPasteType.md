@@ -1,0 +1,12 @@
+## CopyPasteType
+
+### Properties
+
+- PASTE_NORMAL — Enum
+- PASTE_NO_BORDERS — Enum
+- PASTE_FORMAT — Enum
+- PASTE_FORMULA — Enum
+- PASTE_DATA_VALIDATION — Enum
+- PASTE_VALUES — Enum
+- PASTE_CONDITIONAL_FORMATTING — Enum
+- PASTE_COLUMN_WIDTHS — Enum

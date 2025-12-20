@@ -1,0 +1,42 @@
+## DataValidationBuilder
+
+### Methods
+
+- build() — DataValidation
+- copy() — DataValidationBuilder
+- getAllowInvalid() — Boolean
+- getCriteriaType() — DataValidationCriteria
+- getCriteriaValues() — Object[]
+- getHelpText() — String
+- requireCheckbox() — DataValidationBuilder
+- requireCheckbox(checkedValue) — DataValidationBuilder
+- requireCheckbox(checkedValue, uncheckedValue) — DataValidationBuilder
+- requireDate() — DataValidationBuilder
+- requireDateAfter(date) — DataValidationBuilder
+- requireDateBefore(date) — DataValidationBuilder
+- requireDateBetween(start, end) — DataValidationBuilder
+- requireDateEqualTo(date) — DataValidationBuilder
+- requireDateNotBetween(start, end) — DataValidationBuilder
+- requireDateOnOrAfter(date) — DataValidationBuilder
+- requireDateOnOrBefore(date) — DataValidationBuilder
+- requireFormulaSatisfied(formula) — DataValidationBuilder
+- requireNumberBetween(start, end) — DataValidationBuilder
+- requireNumberEqualTo(number) — DataValidationBuilder
+- requireNumberGreaterThan(number) — DataValidationBuilder
+- requireNumberGreaterThanOrEqualTo(number) — DataValidationBuilder
+- requireNumberLessThan(number) — DataValidationBuilder
+- requireNumberLessThanOrEqualTo(number) — DataValidationBuilder
+- requireNumberNotBetween(start, end) — DataValidationBuilder
+- requireNumberNotEqualTo(number) — DataValidationBuilder
+- requireTextContains(text) — DataValidationBuilder
+- requireTextDoesNotContain(text) — DataValidationBuilder
+- requireTextEqualTo(text) — DataValidationBuilder
+- requireTextIsEmail() — DataValidationBuilder
+- requireTextIsUrl() — DataValidationBuilder
+- requireValueInList(values) — DataValidationBuilder
+- requireValueInList(values, showDropdown) — DataValidationBuilder
+- requireValueInRange(range) — DataValidationBuilder
+- requireValueInRange(range, showDropdown) — DataValidationBuilder
+- setAllowInvalid(allowInvalidData) — DataValidationBuilder
+- setHelpText(helpText) — DataValidationBuilder
+- withCriteria(criteria, args) — DataValidationBuilder

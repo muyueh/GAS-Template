@@ -1,0 +1,47 @@
+## FilterCriteriaBuilder
+
+### Methods
+
+- build() — FilterCriteria
+- copy() — FilterCriteriaBuilder
+- getCriteriaType() — BooleanCriteria
+- getCriteriaValues() — Object[]
+- getHiddenValues() — String[]
+- getVisibleBackgroundColor() — Color
+- getVisibleForegroundColor() — Color
+- getVisibleValues() — String[]
+- setHiddenValues(values) — FilterCriteriaBuilder
+- setVisibleBackgroundColor(visibleBackgroundColor) — FilterCriteriaBuilder
+- setVisibleForegroundColor(visibleForegroundColor) — FilterCriteriaBuilder
+- setVisibleValues(values) — FilterCriteriaBuilder
+- whenCellEmpty() — FilterCriteriaBuilder
+- whenCellNotEmpty() — FilterCriteriaBuilder
+- whenDateAfter(date) — FilterCriteriaBuilder
+- whenDateAfter(date) — FilterCriteriaBuilder
+- whenDateBefore(date) — FilterCriteriaBuilder
+- whenDateBefore(date) — FilterCriteriaBuilder
+- whenDateEqualTo(date) — FilterCriteriaBuilder
+- whenDateEqualTo(date) — FilterCriteriaBuilder
+- whenDateEqualToAny(dates) — FilterCriteriaBuilder
+- whenDateNotEqualTo(date) — FilterCriteriaBuilder
+- whenDateNotEqualToAny(dates) — FilterCriteriaBuilder
+- whenFormulaSatisfied(formula) — FilterCriteriaBuilder
+- whenNumberBetween(start, end) — FilterCriteriaBuilder
+- whenNumberEqualTo(number) — FilterCriteriaBuilder
+- whenNumberEqualToAny(numbers) — FilterCriteriaBuilder
+- whenNumberGreaterThan(number) — FilterCriteriaBuilder
+- whenNumberGreaterThanOrEqualTo(number) — FilterCriteriaBuilder
+- whenNumberLessThan(number) — FilterCriteriaBuilder
+- whenNumberLessThanOrEqualTo(number) — FilterCriteriaBuilder
+- whenNumberNotBetween(start, end) — FilterCriteriaBuilder
+- whenNumberNotEqualTo(number) — FilterCriteriaBuilder
+- whenNumberNotEqualToAny(numbers) — FilterCriteriaBuilder
+- whenTextContains(text) — FilterCriteriaBuilder
+- whenTextDoesNotContain(text) — FilterCriteriaBuilder
+- whenTextEndsWith(text) — FilterCriteriaBuilder
+- whenTextEqualTo(text) — FilterCriteriaBuilder
+- whenTextEqualToAny(texts) — FilterCriteriaBuilder
+- whenTextNotEqualTo(text) — FilterCriteriaBuilder
+- whenTextNotEqualToAny(texts) — FilterCriteriaBuilder
+- whenTextStartsWith(text) — FilterCriteriaBuilder
+- withCriteria(criteria, args) — FilterCriteriaBuilder

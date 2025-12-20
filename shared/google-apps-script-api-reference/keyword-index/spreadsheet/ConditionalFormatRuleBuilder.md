@@ -1,0 +1,51 @@
+## ConditionalFormatRuleBuilder
+
+### Methods
+
+- build() — ConditionalFormatRule
+- copy() — ConditionalFormatRuleBuilder
+- getBooleanCondition() — BooleanCondition
+- getGradientCondition() — GradientCondition
+- getRanges() — Range[]
+- setBackground(color) — ConditionalFormatRuleBuilder
+- setBackgroundObject(color) — ConditionalFormatRuleBuilder
+- setBold(bold) — ConditionalFormatRuleBuilder
+- setFontColor(color) — ConditionalFormatRuleBuilder
+- setFontColorObject(color) — ConditionalFormatRuleBuilder
+- setGradientMaxpoint(color) — ConditionalFormatRuleBuilder
+- setGradientMaxpointObject(color) — ConditionalFormatRuleBuilder
+- setGradientMaxpointObjectWithValue(color, type, value) — ConditionalFormatRuleBuilder
+- setGradientMaxpointWithValue(color, type, value) — ConditionalFormatRuleBuilder
+- setGradientMidpointObjectWithValue(color, type, value) — ConditionalFormatRuleBuilder
+- setGradientMidpointWithValue(color, type, value) — ConditionalFormatRuleBuilder
+- setGradientMinpoint(color) — ConditionalFormatRuleBuilder
+- setGradientMinpointObject(color) — ConditionalFormatRuleBuilder
+- setGradientMinpointObjectWithValue(color, type, value) — ConditionalFormatRuleBuilder
+- setGradientMinpointWithValue(color, type, value) — ConditionalFormatRuleBuilder
+- setItalic(italic) — ConditionalFormatRuleBuilder
+- setRanges(ranges) — ConditionalFormatRuleBuilder
+- setStrikethrough(strikethrough) — ConditionalFormatRuleBuilder
+- setUnderline(underline) — ConditionalFormatRuleBuilder
+- whenCellEmpty() — ConditionalFormatRuleBuilder
+- whenCellNotEmpty() — ConditionalFormatRuleBuilder
+- whenDateAfter(date) — ConditionalFormatRuleBuilder
+- whenDateAfter(date) — ConditionalFormatRuleBuilder
+- whenDateBefore(date) — ConditionalFormatRuleBuilder
+- whenDateBefore(date) — ConditionalFormatRuleBuilder
+- whenDateEqualTo(date) — ConditionalFormatRuleBuilder
+- whenDateEqualTo(date) — ConditionalFormatRuleBuilder
+- whenFormulaSatisfied(formula) — ConditionalFormatRuleBuilder
+- whenNumberBetween(start, end) — ConditionalFormatRuleBuilder
+- whenNumberEqualTo(number) — ConditionalFormatRuleBuilder
+- whenNumberGreaterThan(number) — ConditionalFormatRuleBuilder
+- whenNumberGreaterThanOrEqualTo(number) — ConditionalFormatRuleBuilder
+- whenNumberLessThan(number) — ConditionalFormatRuleBuilder
+- whenNumberLessThanOrEqualTo(number) — ConditionalFormatRuleBuilder
+- whenNumberNotBetween(start, end) — ConditionalFormatRuleBuilder
+- whenNumberNotEqualTo(number) — ConditionalFormatRuleBuilder
+- whenTextContains(text) — ConditionalFormatRuleBuilder
+- whenTextDoesNotContain(text) — ConditionalFormatRuleBuilder
+- whenTextEndsWith(text) — ConditionalFormatRuleBuilder
+- whenTextEqualTo(text) — ConditionalFormatRuleBuilder
+- whenTextStartsWith(text) — ConditionalFormatRuleBuilder
+- withCriteria(criteria, args) — ConditionalFormatRuleBuilder

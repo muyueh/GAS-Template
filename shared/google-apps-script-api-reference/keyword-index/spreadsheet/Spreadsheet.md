@@ -1,0 +1,146 @@
+## Spreadsheet
+
+### Methods
+
+- addDeveloperMetadata(key) — Spreadsheet
+- addDeveloperMetadata(key, visibility) — Spreadsheet
+- addDeveloperMetadata(key, value) — Spreadsheet
+- addDeveloperMetadata(key, value, visibility) — Spreadsheet
+- addEditor(emailAddress) — Spreadsheet
+- addEditor(user) — Spreadsheet
+- addEditors(emailAddresses) — Spreadsheet
+- addMenu(name, subMenus) — void
+- addViewer(emailAddress) — Spreadsheet
+- addViewer(user) — Spreadsheet
+- addViewers(emailAddresses) — Spreadsheet
+- appendRow(rowContents) — Sheet
+- autoResizeColumn(columnPosition) — Sheet
+- copy(name) — Spreadsheet
+- createDeveloperMetadataFinder() — DeveloperMetadataFinder
+- createTextFinder(findText) — TextFinder
+- deleteActiveSheet() — Sheet
+- deleteColumn(columnPosition) — Sheet
+- deleteColumns(columnPosition, howMany) — void
+- deleteRow(rowPosition) — Sheet
+- deleteRows(rowPosition, howMany) — void
+- deleteSheet(sheet) — void
+- duplicateActiveSheet() — Sheet
+- getActiveCell() — Range
+- getActiveRange() — Range
+- getActiveRangeList() — RangeList
+- getActiveSheet() — Sheet
+- getAs(contentType) — Blob
+- getBandings() — Banding[]
+- getBlob() — Blob
+- getColumnWidth(columnPosition) — Integer
+- getCurrentCell() — Range
+- getDataRange() — Range
+- getDataSourceFormulas() — DataSourceFormula[]
+- getDataSourcePivotTables() — DataSourcePivotTable[]
+- getDataSourceRefreshSchedules() — DataSourceRefreshSchedule[]
+- getDataSourceSheets() — DataSourceSheet[]
+- getDataSourceTables() — DataSourceTable[]
+- getDataSources() — DataSource[]
+- getDeveloperMetadata() — DeveloperMetadata[]
+- getEditors() — User[]
+- getFormUrl() — String
+- getFrozenColumns() — Integer
+- getFrozenRows() — Integer
+- getId() — String
+- getImages() — OverGridImage[]
+- getIterativeCalculationConvergenceThreshold() — Number
+- getLastColumn() — Integer
+- getLastRow() — Integer
+- getMaxIterativeCalculationCycles() — Integer
+- getName() — String
+- getNamedRanges() — NamedRange[]
+- getNumSheets() — Integer
+- getOwner() — User
+- getPredefinedSpreadsheetThemes() — SpreadsheetTheme[]
+- getProtections(type) — Protection[]
+- getRange(a1Notation) — Range
+- getRangeByName(name) — Range
+- getRangeList(a1Notations) — RangeList
+- getRecalculationInterval() — RecalculationInterval
+- getRowHeight(rowPosition) — Integer
+- getSelection() — Selection
+- getSheetById(id) — Sheet
+- getSheetByName(name) — Sheet
+- getSheetId() — Integer
+- getSheetName() — String
+- getSheetValues(startRow, startColumn, numRows, numColumns) — Object[][]
+- getSheets() — Sheet[]
+- getSpreadsheetLocale() — String
+- getSpreadsheetTheme() — SpreadsheetTheme
+- getSpreadsheetTimeZone() — String
+- getUrl() — String
+- getViewers() — User[]
+- hideColumn(column) — void
+- hideRow(row) — void
+- insertColumnAfter(afterPosition) — Sheet
+- insertColumnBefore(beforePosition) — Sheet
+- insertColumnsAfter(afterPosition, howMany) — Sheet
+- insertColumnsBefore(beforePosition, howMany) — Sheet
+- insertDataSourceSheet(spec) — DataSourceSheet
+- insertImage(blobSource, column, row) — OverGridImage
+- insertImage(blobSource, column, row, offsetX, offsetY) — OverGridImage
+- insertImage(url, column, row) — OverGridImage
+- insertImage(url, column, row, offsetX, offsetY) — OverGridImage
+- insertRowAfter(afterPosition) — Sheet
+- insertRowBefore(beforePosition) — Sheet
+- insertRowsAfter(afterPosition, howMany) — Sheet
+- insertRowsBefore(beforePosition, howMany) — Sheet
+- insertSheet() — Sheet
+- insertSheet(sheetIndex) — Sheet
+- insertSheet(sheetIndex, options) — Sheet
+- insertSheet(options) — Sheet
+- insertSheet(sheetName) — Sheet
+- insertSheet(sheetName, sheetIndex) — Sheet
+- insertSheet(sheetName, sheetIndex, options) — Sheet
+- insertSheet(sheetName, options) — Sheet
+- insertSheetWithDataSourceTable(spec) — Sheet
+- isColumnHiddenByUser(columnPosition) — Boolean
+- isIterativeCalculationEnabled() — Boolean
+- isRowHiddenByFilter(rowPosition) — Boolean
+- isRowHiddenByUser(rowPosition) — Boolean
+- moveActiveSheet(pos) — void
+- moveChartToObjectSheet(chart) — Sheet
+- refreshAllDataSources() — void
+- removeEditor(emailAddress) — Spreadsheet
+- removeEditor(user) — Spreadsheet
+- removeMenu(name) — void
+- removeNamedRange(name) — void
+- removeViewer(emailAddress) — Spreadsheet
+- removeViewer(user) — Spreadsheet
+- rename(newName) — void
+- renameActiveSheet(newName) — void
+- resetSpreadsheetTheme() — SpreadsheetTheme
+- setActiveRange(range) — Range
+- setActiveRangeList(rangeList) — RangeList
+- setActiveSelection(range) — Range
+- setActiveSelection(a1Notation) — Range
+- setActiveSheet(sheet) — Sheet
+- setActiveSheet(sheet, restoreSelection) — Sheet
+- setColumnWidth(columnPosition, width) — Sheet
+- setCurrentCell(cell) — Range
+- setFrozenColumns(columns) — void
+- setFrozenRows(rows) — void
+- setIterativeCalculationConvergenceThreshold(minThreshold) — Spreadsheet
+- setIterativeCalculationEnabled(isEnabled) — Spreadsheet
+- setMaxIterativeCalculationCycles(maxIterations) — Spreadsheet
+- setNamedRange(name, range) — void
+- setRecalculationInterval(recalculationInterval) — Spreadsheet
+- setRowHeight(rowPosition, height) — Sheet
+- setSpreadsheetLocale(locale) — void
+- setSpreadsheetTheme(theme) — SpreadsheetTheme
+- setSpreadsheetTimeZone(timezone) — void
+- show(userInterface) — void
+- sort(columnPosition) — Sheet
+- sort(columnPosition, ascending) — Sheet
+- toast(msg) — void
+- toast(msg, title) — void
+- toast(msg, title, timeoutSeconds) — void
+- unhideColumn(column) — void
+- unhideRow(row) — void
+- updateMenu(name, subMenus) — void
+- waitForAllDataExecutionsCompletion(timeoutInSeconds) — void

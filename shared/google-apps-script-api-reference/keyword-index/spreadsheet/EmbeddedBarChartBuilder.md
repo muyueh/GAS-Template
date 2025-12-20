@@ -1,0 +1,44 @@
+## EmbeddedBarChartBuilder
+
+### Methods
+
+- addRange(range) — EmbeddedChartBuilder
+- asAreaChart() — EmbeddedAreaChartBuilder
+- asBarChart() — EmbeddedBarChartBuilder
+- asColumnChart() — EmbeddedColumnChartBuilder
+- asComboChart() — EmbeddedComboChartBuilder
+- asHistogramChart() — EmbeddedHistogramChartBuilder
+- asLineChart() — EmbeddedLineChartBuilder
+- asPieChart() — EmbeddedPieChartBuilder
+- asScatterChart() — EmbeddedScatterChartBuilder
+- asTableChart() — EmbeddedTableChartBuilder
+- build() — EmbeddedChart
+- clearRanges() — EmbeddedChartBuilder
+- getChartType() — ChartType
+- getContainer() — ContainerInfo
+- getRanges() — Range[]
+- removeRange(range) — EmbeddedChartBuilder
+- reverseCategories() — EmbeddedBarChartBuilder
+- reverseDirection() — EmbeddedBarChartBuilder
+- setBackgroundColor(cssValue) — EmbeddedBarChartBuilder
+- setChartType(type) — EmbeddedChartBuilder
+- setColors(cssValues) — EmbeddedBarChartBuilder
+- setHiddenDimensionStrategy(strategy) — EmbeddedChartBuilder
+- setLegendPosition(position) — EmbeddedBarChartBuilder
+- setLegendTextStyle(textStyle) — EmbeddedBarChartBuilder
+- setMergeStrategy(mergeStrategy) — EmbeddedChartBuilder
+- setNumHeaders(headers) — EmbeddedChartBuilder
+- setOption(option, value) — EmbeddedChartBuilder
+- setPosition(anchorRowPos, anchorColPos, offsetX, offsetY) — EmbeddedChartBuilder
+- setRange(start, end) — EmbeddedBarChartBuilder
+- setStacked() — EmbeddedBarChartBuilder
+- setTitle(chartTitle) — EmbeddedBarChartBuilder
+- setTitleTextStyle(textStyle) — EmbeddedBarChartBuilder
+- setTransposeRowsAndColumns(transpose) — EmbeddedChartBuilder
+- setXAxisTextStyle(textStyle) — EmbeddedBarChartBuilder
+- setXAxisTitle(title) — EmbeddedBarChartBuilder
+- setXAxisTitleTextStyle(textStyle) — EmbeddedBarChartBuilder
+- setYAxisTextStyle(textStyle) — EmbeddedBarChartBuilder
+- setYAxisTitle(title) — EmbeddedBarChartBuilder
+- setYAxisTitleTextStyle(textStyle) — EmbeddedBarChartBuilder
+- useLogScale() — EmbeddedBarChartBuilder

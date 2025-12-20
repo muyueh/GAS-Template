@@ -1,0 +1,44 @@
+## EmbeddedAreaChartBuilder
+
+### Methods
+
+- addRange(range) — EmbeddedChartBuilder
+- asAreaChart() — EmbeddedAreaChartBuilder
+- asBarChart() — EmbeddedBarChartBuilder
+- asColumnChart() — EmbeddedColumnChartBuilder
+- asComboChart() — EmbeddedComboChartBuilder
+- asHistogramChart() — EmbeddedHistogramChartBuilder
+- asLineChart() — EmbeddedLineChartBuilder
+- asPieChart() — EmbeddedPieChartBuilder
+- asScatterChart() — EmbeddedScatterChartBuilder
+- asTableChart() — EmbeddedTableChartBuilder
+- build() — EmbeddedChart
+- clearRanges() — EmbeddedChartBuilder
+- getChartType() — ChartType
+- getContainer() — ContainerInfo
+- getRanges() — Range[]
+- removeRange(range) — EmbeddedChartBuilder
+- reverseCategories() — EmbeddedAreaChartBuilder
+- setBackgroundColor(cssValue) — EmbeddedAreaChartBuilder
+- setChartType(type) — EmbeddedChartBuilder
+- setColors(cssValues) — EmbeddedAreaChartBuilder
+- setHiddenDimensionStrategy(strategy) — EmbeddedChartBuilder
+- setLegendPosition(position) — EmbeddedAreaChartBuilder
+- setLegendTextStyle(textStyle) — EmbeddedAreaChartBuilder
+- setMergeStrategy(mergeStrategy) — EmbeddedChartBuilder
+- setNumHeaders(headers) — EmbeddedChartBuilder
+- setOption(option, value) — EmbeddedChartBuilder
+- setPointStyle(style) — EmbeddedAreaChartBuilder
+- setPosition(anchorRowPos, anchorColPos, offsetX, offsetY) — EmbeddedChartBuilder
+- setRange(start, end) — EmbeddedAreaChartBuilder
+- setStacked() — EmbeddedAreaChartBuilder
+- setTitle(chartTitle) — EmbeddedAreaChartBuilder
+- setTitleTextStyle(textStyle) — EmbeddedAreaChartBuilder
+- setTransposeRowsAndColumns(transpose) — EmbeddedChartBuilder
+- setXAxisTextStyle(textStyle) — EmbeddedAreaChartBuilder
+- setXAxisTitle(title) — EmbeddedAreaChartBuilder
+- setXAxisTitleTextStyle(textStyle) — EmbeddedAreaChartBuilder
+- setYAxisTextStyle(textStyle) — EmbeddedAreaChartBuilder
+- setYAxisTitle(title) — EmbeddedAreaChartBuilder
+- setYAxisTitleTextStyle(textStyle) — EmbeddedAreaChartBuilder
+- useLogScale() — EmbeddedAreaChartBuilder

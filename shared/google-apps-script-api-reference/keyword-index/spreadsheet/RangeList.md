@@ -1,0 +1,43 @@
+## RangeList
+
+### Methods
+
+- activate() — RangeList
+- breakApart() — RangeList
+- check() — RangeList
+- clear() — RangeList
+- clear(options) — RangeList
+- clearContent() — RangeList
+- clearDataValidations() — RangeList
+- clearFormat() — RangeList
+- clearNote() — RangeList
+- getRanges() — Range[]
+- insertCheckboxes() — RangeList
+- insertCheckboxes(checkedValue) — RangeList
+- insertCheckboxes(checkedValue, uncheckedValue) — RangeList
+- removeCheckboxes() — RangeList
+- setBackground(color) — RangeList
+- setBackgroundRGB(red, green, blue) — RangeList
+- setBorder(top, left, bottom, right, vertical, horizontal) — RangeList
+- setBorder(top, left, bottom, right, vertical, horizontal, color, style) — RangeList
+- setFontColor(color) — RangeList
+- setFontFamily(fontFamily) — RangeList
+- setFontLine(fontLine) — RangeList
+- setFontSize(size) — RangeList
+- setFontStyle(fontStyle) — RangeList
+- setFontWeight(fontWeight) — RangeList
+- setFormula(formula) — RangeList
+- setFormulaR1C1(formula) — RangeList
+- setHorizontalAlignment(alignment) — RangeList
+- setNote(note) — RangeList
+- setNumberFormat(numberFormat) — RangeList
+- setShowHyperlink(showHyperlink) — RangeList
+- setTextDirection(direction) — RangeList
+- setTextRotation(degrees) — RangeList
+- setValue(value) — RangeList
+- setVerticalAlignment(alignment) — RangeList
+- setVerticalText(isVertical) — RangeList
+- setWrap(isWrapEnabled) — RangeList
+- setWrapStrategy(strategy) — RangeList
+- trimWhitespace() — RangeList
+- uncheck() — RangeList
