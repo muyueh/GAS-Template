@@ -2,10 +2,9 @@ import { logInfo } from '../lib/logger';
 
 /**
  * Searches Gmail threads using the same query syntax as Gmail's search box.
- *
- * @param {string} query - Gmail search query (e.g., "newer_than:7d label:inbox").
- * @param {number} maxThreads - Maximum number of threads to return.
- * @returns {GoogleAppsScript.Gmail.GmailThread[]} Matching threads.
+ * @param query Gmail search query (e.g., "newer_than:7d label:inbox").
+ * @param maxThreads Maximum number of threads to return.
+ * @returns Matching threads.
  */
 export function searchThreads(query: string, maxThreads: number): GoogleAppsScript.Gmail.GmailThread[] {
   logInfo('searchThreads()', { query, maxThreads });
@@ -14,9 +13,8 @@ export function searchThreads(query: string, maxThreads: number): GoogleAppsScri
 
 /**
  * Extracts basic metadata from threads (useful for logging/debugging).
- *
- * @param {GoogleAppsScript.Gmail.GmailThread[]} threads - Threads returned by GmailApp.search.
- * @returns {{ subject: string; messageCount: number; lastUpdated: string }[]} Summaries.
+ * @param threads Threads returned by GmailApp.search.
+ * @returns Summaries.
  */
 export function summarizeThreads(
   threads: GoogleAppsScript.Gmail.GmailThread[]

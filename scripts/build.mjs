@@ -1,3 +1,4 @@
+/* global console, process */
 import { build } from 'esbuild';
 import { cpSync, existsSync, mkdirSync, readdirSync, rmSync, statSync } from 'node:fs';
 import path from 'node:path';
@@ -5,11 +6,10 @@ import { fileURLToPath } from 'node:url';
 
 /**
  * Recursively copies files from one directory to another.
- *
- * @param {string} fromDir - Source directory path.
- * @param {string} toDir - Destination directory path.
- * @param {(filename: string) => boolean} shouldCopyFile - Predicate to decide which files to copy.
- * @returns {void} Nothing.
+ * @param fromDir Source directory path.
+ * @param toDir Destination directory path.
+ * @param shouldCopyFile Predicate to decide which files to copy.
+ * @returns Nothing.
  */
 function copyDir(fromDir, toDir, shouldCopyFile) {
   mkdirSync(toDir, { recursive: true });
@@ -27,6 +27,8 @@ function copyDir(fromDir, toDir, shouldCopyFile) {
       cpSync(from, to);
     }
   }
+
+  return undefined;
 }
 
 /**
@@ -36,8 +38,7 @@ function copyDir(fromDir, toDir, shouldCopyFile) {
  * - dist/Code.js (bundled JS, no modules)
  * - dist/appsscript.json (manifest)
  * - dist/*.html (optional UI files from src/ui)
- *
- * @returns {Promise<void>} Resolves when build is complete.
+ * @returns Resolves when build is complete.
  */
 async function main() {
   const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -74,6 +75,8 @@ async function main() {
   if (existsSync(uiDir)) {
     copyDir(uiDir, distDir, (name) => name.endsWith('.html'));
   }
+
+  return undefined;
 }
 
 main().catch((err) => {
