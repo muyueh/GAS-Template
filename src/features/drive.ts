@@ -2,10 +2,9 @@ import { logInfo } from '../lib/logger';
 
 /**
  * Creates a folder under a parent folder if it does not already exist.
- *
- * @param {GoogleAppsScript.Drive.Folder} parent - The parent folder.
- * @param {string} name - Folder name to find/create.
- * @returns {GoogleAppsScript.Drive.Folder} The existing or newly created folder.
+ * @param parent The parent folder.
+ * @param name Folder name to find/create.
+ * @returns The existing or newly created folder.
  */
 export function getOrCreateFolder(
   parent: GoogleAppsScript.Drive.Folder,
@@ -23,8 +22,7 @@ export function getOrCreateFolder(
 
 /**
  * Gets the script owner's root Drive folder.
- *
- * @returns {GoogleAppsScript.Drive.Folder} The root folder.
+ * @returns The root folder.
  */
 export function getRootFolder(): GoogleAppsScript.Drive.Folder {
   logInfo('getRootFolder()');

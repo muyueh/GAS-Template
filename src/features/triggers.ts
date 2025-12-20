@@ -2,14 +2,12 @@ import { logInfo } from '../lib/logger';
 
 /**
  * Installs a time-driven trigger that runs once per day.
- *
  * Important:
  * - The handler function must be exposed as a global function in Apps Script.
  *   (See src/lib/registerGlobals.ts)
- *
- * @param {string} handlerFunctionName - Name of the global function to run.
- * @param {number} hour - Hour of day in the script's timezone (0-23).
- * @returns {GoogleAppsScript.Script.Trigger} The created trigger.
+ * @param handlerFunctionName Name of the global function to run.
+ * @param hour Hour of day in the script's timezone (0-23).
+ * @returns The created trigger.
  */
 export function installDailyTrigger(
   handlerFunctionName: string,
@@ -28,8 +26,7 @@ export function installDailyTrigger(
 
 /**
  * Deletes all triggers for the current script project.
- *
- * @returns {void} Nothing.
+ * @returns Nothing.
  */
 export function deleteAllTriggers(): void {
   logInfo('Deleting all triggers');
@@ -38,4 +35,6 @@ export function deleteAllTriggers(): void {
   for (const t of triggers) {
     ScriptApp.deleteTrigger(t);
   }
+
+  return undefined;
 }

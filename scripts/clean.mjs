@@ -4,8 +4,7 @@ import { fileURLToPath } from 'node:url';
 
 /**
  * Removes the generated /dist folder.
- *
- * @returns {void} Nothing.
+ * @returns Nothing.
  */
 function clean() {
   const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -13,6 +12,8 @@ function clean() {
   const distDir = path.join(projectRoot, 'dist');
 
   rmSync(distDir, { recursive: true, force: true });
+
+  return undefined;
 }
 
 clean();
