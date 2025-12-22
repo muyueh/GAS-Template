@@ -40,13 +40,7 @@ jobs:
 
           echo "Detected scriptId in .clasp.json; continuing deployment."
 
-      - name: Install
-        run: npm ci
-
-      - name: Build
-        run: npm run build
-
-      - name: Setup clasp auth
+      - name: Validate clasp auth secret
         env:
           CLASPRC_JSON: ${{ secrets.CLASPRC_JSON }}
         run: |
@@ -56,7 +50,28 @@ jobs:
           fi
 
           printf '%s' "$CLASPRC_JSON" > "$HOME/.clasprc.json"
-          node -e "JSON.parse(require('fs').readFileSync(process.env.HOME+'/.clasprc.json','utf8')); console.log('✅ .clasprc.json OK');"
+
+          node - <<'NODE'
+const fs = require('fs');
+const path = `${process.env.HOME}/.clasprc.json`;
+const data = JSON.parse(fs.readFileSync(path, 'utf8'));
+
+const refreshToken = data.refresh_token || (data.token && data.token.refresh_token);
+const clientId = data.clientId || (data.oauth2ClientSettings && data.oauth2ClientSettings.clientId);
+const clientSecret = data.clientSecret || (data.oauth2ClientSettings && data.oauth2ClientSettings.clientSecret);
+
+if (!refreshToken || !clientId || !clientSecret) {
+  throw new Error('Incomplete clasp credentials: refresh_token, clientId, and clientSecret are required.');
+}
+
+console.log('✅ CLASPRC_JSON looks valid and contains required tokens.');
+NODE
+
+      - name: Install
+        run: npm ci
+
+      - name: Build
+        run: npm run build
 
       - name: clasp push
         run: npx clasp push -f
