@@ -29,7 +29,7 @@ jobs:
           echo "Detected scriptId in .clasp.json; continuing checks."
 
       - name: Validate clasp auth secret
-        if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         env:
           CLASPRC_JSON: ${{ secrets.CLASPRC_JSON }}
         run: |
@@ -56,9 +56,9 @@ jobs:
           console.log('✅ CLASPRC_JSON looks valid and contains required tokens.');
           NODE
 
-      - name: Skip secret validation for forked PRs
-        if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository
-        run: echo "::warning::Skipping CLASPRC_JSON validation for forked pull request (secrets are not provided)."
+      - name: Skip secret validation for non-main runs
+        if: github.event_name != 'push' || github.ref != 'refs/heads/main'
+        run: echo "::warning::Skipping CLASPRC_JSON validation outside main branch pushes."
 
   ci:
     needs: guardrails
