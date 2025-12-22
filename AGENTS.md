@@ -24,6 +24,24 @@
 
 ---
 
+## Fork 後第一步（給 Codex / Agent 指令）
+
+> 任何剛 Fork 本 Template 或在新環境開發的人，必須先完成下列流程；請 Codex/Agent 用這份指引帶著使用者走完。
+
+1. 由 Codex/Agent 在可開瀏覽器的環境執行 `npx clasp login --no-localhost`，將終端機顯示的授權 URL 貼給使用者，請使用者在瀏覽器完成授權。
+2. 使用者授權後，複製完整的 redirect URL（含 `code=`）貼回終端機，由 Codex/Agent 繼續流程。
+3. 確認 `npx clasp login --status` 已顯示登入帳號。
+4. Codex/Agent 以清晰的分隔符列印本機 `~/.clasprc.json` 的**完整且非空**內容，避免前後空白或遺漏（例如用 `-----BEGIN CLASPRC_JSON-----` / `-----END CLASPRC_JSON-----` 包住原始 JSON）。
+5. 打開 GitHub Repo → **Settings → Secrets and variables → Actions**，新增/更新 `CLASPRC_JSON`，值為第 4 步的完整 JSON。
+
+注意：
+- `CLASPRC_JSON` 是 CI 還原 `~/.clasprc.json` 的唯一來源，缺少或為空會讓 CI 直接失敗。
+- 憑證是機器層級設定，換環境或 Fork 後都要重跑登入。
+- 若憑證外洩或不確定安全性，請重新執行 `npx clasp login --no-localhost` 產生新 `~/.clasprc.json`，並更新 GitHub Secret。
+- CI/CD 會檢查 `CLASPRC_JSON` 是否存在且非空；未設定會使 workflow 直接失敗。
+
+---
+
 ## 1) 核心原則（不可違反）
 
 1. **GAS 程式碼一律使用 TypeScript（.ts）**
