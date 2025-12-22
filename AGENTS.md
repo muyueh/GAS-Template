@@ -487,3 +487,9 @@ export function registerGlobalFunctions(): void {
 * 狀況：CI 回報 CLASPRC_JSON 缺少 `refresh_token` / `clientId` / `clientSecret`，推測是複製貼上時被截斷。
 * 處置：請執行 `npm run check:clasprc -- --print --base64` 重新驗證本機 `~/.clasprc.json`，並重新複製指令輸出的區塊（純文字或 Base64 皆可）到 GitHub Secrets：`CLASPRC_JSON`。
 * 備註：Base64 區塊可避免部分工具自動轉義或刪除換行。
+
+### 2025-03-10：認證問題重跑流程規範
+
+* 狀況：遇到 clasp 認證異常或 CI 憑證錯誤時。
+* 處置：必須重新跑認證流程，由 Codex/Agent 提供 `npx clasp login --no-localhost` 的指引，使用者在瀏覽器授權後將完整 redirect URL 貼回終端機，由 Codex/Agent 完成後續輸入。
+* 要求：認證指令與使用者貼回的完整 URL 流程必須在對話紀錄中留存（可作為後續追溯與更新 `CLASPRC_JSON` 的依據）。
