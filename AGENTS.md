@@ -3,7 +3,7 @@
 
 > 所有要部署到 Google Apps Script 的程式碼都用 TypeScript + JSDoc，並由 GitHub Actions 在 push main 後自動部署。
 > 要跑 clasp/CI 時先釐清 `~/.clasprc.json` 才是憑證；
-> **沒有 Script ID 就不要建立/修改 `.clasp.json`**；
+> **沒有 Script ID 就不要建立/修改 `.clasp.json`**（⚠️ 未取得 Script ID 前請不要新建或修改 `.clasp.json`，避免部署指向未知專案）；
 > **寫/改任何 GAS 程式碼或 manifest 前，必須先做 Reference Check（查 vendor library），並在對話/PR 中回報你查了哪些檔案。**
 
 ---
@@ -15,12 +15,17 @@
   2. `npm install`
   3. 建立 `.clasp.json`（scriptId + rootDir=dist，並 commit）
      - 若是 monorepo：每個 `apps-script/gas-xxx/` 都要各自有一份可用的 `.clasp.json`
-  4. `npx clasp login --status`（沒登入就 `npx clasp login --no-localhost`）
-  5. 把「**完整且非空**」的 `~/.clasprc.json` 內容放到 GitHub Secrets：`CLASPRC_JSON`（預設貼 `npm run check:clasprc -- --print --base64` 輸出的 Base64 區塊；純 JSON 也可）
+  4. `npx clasp login --status`（沒登入或在非互動環境就用 `npx clasp login --no-localhost`，把 URL 給使用者開）
+  5. 把「**完整且非空**」的 `~/.clasprc.json` 內容放到 GitHub Secrets：`CLASPRC_JSON`（建議用 `npm run check:clasprc -- --print --base64` 取得 Base64；純 JSON 也可）
   6. 確認 `.clasp.json` 已填入**真實的** `scriptId`（不能留 `REPLACE_WITH_SCRIPT_ID`），否則 deploy workflow 會失敗
 - 改 code 前後一定要：
   - `npm run check`
   - 改到 `src/**` 或 `appsscript.json` → PR Body 填 `## Reference Check`
+
+### 常見錯誤對應表（極短版）
+- `clasp login` 無法開瀏覽器：改用 `npx clasp login --no-localhost`，把 URL 給使用者開，使用者回貼完整 redirect URL。
+- CI 提示 Missing `CLASPRC_JSON`：到 GitHub Secrets 補上完整 `~/.clasprc.json`（Base64 或純 JSON）。
+- CI 提示 `scriptId` 缺失：檢查 `.clasp.json` 是否填入真實 Script ID，且已 commit。
 
 ---
 
@@ -31,7 +36,7 @@
 1. 由 Codex/Agent 在可開瀏覽器的環境執行 `npx clasp login --no-localhost`，將終端機顯示的授權 URL 貼給使用者，請使用者在瀏覽器完成授權。
 2. 使用者授權後，複製完整的 redirect URL（含 `code=`）貼回終端機，由 Codex/Agent 繼續流程。
 3. 確認 `npx clasp login --status` 已顯示登入帳號。
-4. Codex/Agent 以清晰的分隔符列印本機 `~/.clasprc.json` 的**完整且非空**內容，避免前後空白或遺漏（例如用 `-----BEGIN CLASPRC_JSON-----` / `-----END CLASPRC_JSON-----` 包住原始 JSON）。
+4. Codex/Agent 以清晰的分隔符列印本機 `~/.clasprc.json` 的**完整且非空**內容，避免前後空白或遺漏（例如用 `-----BEGIN CLASPRC_JSON-----` / `-----END CLASPRC_JSON-----` 包住原始 JSON；若貼 Base64 也同樣需完整）。
 5. 打開 GitHub Repo → **Settings → Secrets and variables → Actions**，新增/更新 `CLASPRC_JSON`，值為第 4 步的完整 JSON（推薦貼 `npm run check:clasprc -- --print --base64` 的 Base64 區塊，workflow 會同時支援 Base64 / 純 JSON）。
 
 注意：
@@ -40,6 +45,19 @@
 - 憑證是機器層級設定，換環境或 Fork 後都要重跑登入。
 - 若憑證外洩或不確定安全性，請重新執行 `npx clasp login --no-localhost` 產生新 `~/.clasprc.json`，並更新 GitHub Secret。
 - CI/CD 會檢查 `CLASPRC_JSON` 是否存在且非空；未設定會使 workflow 直接失敗。
+
+範例輸出（請完整貼上，勿截斷）：
+```
+-----BEGIN CLASPRC_JSON-----
+<這裡貼 Base64 或完整 JSON 內容>
+-----END CLASPRC_JSON-----
+```
+
+### 登入失敗或憑證疑似損壞時的回收步驟
+1. 重新執行 `npx clasp login --no-localhost`，取得新授權 URL，請使用者在瀏覽器完成授權並回貼完整 redirect URL（含 `code=`）。
+2. 再次執行 `npx clasp login --status` 確認帳號。
+3. 用 `npm run check:clasprc -- --print --base64` 驗證 `~/.clasprc.json` 是否完整（Base64 或純 JSON 皆可），並更新 GitHub Secret：`CLASPRC_JSON`。
+4. 在對話中保留 redirect URL 及貼入的 JSON/BASE64 區塊，便於追溯。
 
 ---
 
@@ -259,6 +277,8 @@ GitHub Repo → Settings → Secrets and variables → Actions：
 
 ## 5) 開發與部署（本機與 CI/CD）
 
+**本機檢查順序（推 PR 前照做）：** `npm run lint` → `npm run typecheck` → `npm run build` →（需要時）`npm run deploy`。改到 `src/**` 或 `appsscript.json` 時，務必先完成 Reference Check（見第 7 節）再送 PR。
+
 ### 5.1 本機常用指令
 
 * `npm run lint`：ESLint + JSDoc 規範
@@ -416,6 +436,13 @@ export function registerGlobalFunctions(): void {
 * 1 個 `keyword-index/*.md`
 * 1 個 `full-reference/*.md`
 
+### PR Body 範例（請依實際查閱檔案替換）
+```
+## Reference Check
+- keyword-index: shared/google-apps-script-api-reference/keyword-index/SpreadsheetApp.md
+- full-reference: shared/google-apps-script-api-reference/full-reference/SpreadsheetApp.md
+```
+
 ---
 
 ## 8) Starter modules（在 `src/features`）
@@ -466,7 +493,7 @@ export function registerGlobalFunctions(): void {
 * [ ] `npm run lint` 通過（包含 JSDoc 規範）
 * [ ] `npm run typecheck` 通過
 * [ ] `npm run build` 通過（dist 正常生成）
-* [ ] 若改到 `src/**` 或 `appsscript.json`，PR Body 已填 `## Reference Check`
+* [ ] 若改到 `src/**` 或 `appsscript.json`，已先查 vendor library 並在 PR Body 填寫 `## Reference Check`（格式如第 7 節範例）
 * [ ] 沒有把任何 secret/token/refresh token 寫進 repo（包含貼在檔案、測試碼、註解）
 
 ---
