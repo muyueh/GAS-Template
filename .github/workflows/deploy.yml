@@ -54,14 +54,30 @@ jobs:
           node - <<'NODE'
           const fs = require('fs');
           const path = `${process.env.HOME}/.clasprc.json`;
-          const data = JSON.parse(fs.readFileSync(path, 'utf8'));
+
+          const raw = fs.readFileSync(path, 'utf8').trim();
+          if (!raw) {
+            throw new Error('CLASPRC_JSON is set but empty. Paste the full contents of ~/.clasprc.json from `npx clasp login --no-localhost` (raw JSON, not base64).');
+          }
+
+          let data;
+          try {
+            data = JSON.parse(raw);
+          } catch (error) {
+            throw new Error(`Failed to parse ~/.clasprc.json: ${error instanceof Error ? error.message : String(error)}. Ensure CLASPRC_JSON contains the exact JSON output from clasp with no extra characters.`);
+          }
 
           const refreshToken = data.refresh_token || (data.token && data.token.refresh_token);
           const clientId = data.clientId || (data.oauth2ClientSettings && data.oauth2ClientSettings.clientId);
           const clientSecret = data.clientSecret || (data.oauth2ClientSettings && data.oauth2ClientSettings.clientSecret);
 
-          if (!refreshToken || !clientId || !clientSecret) {
-            throw new Error('Incomplete clasp credentials: refresh_token, clientId, and clientSecret are required.');
+          const missing = [];
+          if (!refreshToken) missing.push('refresh_token');
+          if (!clientId) missing.push('clientId');
+          if (!clientSecret) missing.push('clientSecret');
+
+          if (missing.length) {
+            throw new Error(`Incomplete clasp credentials: missing ${missing.join(', ')}. Re-run 'npx clasp login --no-localhost' and paste the entire ~/.clasprc.json as the CLASPRC_JSON secret (no truncation).`);
           }
 
           console.log('✅ CLASPRC_JSON looks valid and contains required tokens.');
