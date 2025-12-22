@@ -441,3 +441,16 @@ export function registerGlobalFunctions(): void {
 * [ ] `npm run build` 通過（dist 正常生成）
 * [ ] 若改到 `src/**` 或 `appsscript.json`，PR Body 已填 `## Reference Check`
 * [ ] 沒有把任何 secret/token/refresh token 寫進 repo（包含貼在檔案、測試碼、註解）
+
+---
+
+## 11) 作業紀錄
+
+### 2024-12-22：clasp 登入流程
+
+* 目標：為指定的 Script ID 進行 clasp 認證。
+* 步驟：
+  1. `npx clasp login --no-localhost` 取得授權網址。
+  2. 使用者於瀏覽器授權後回傳 redirect URL，內含授權 code。
+  3. 將該 redirect URL 貼回同一個登入流程，完成授權。
+* 結果：clasp 登入成功。
