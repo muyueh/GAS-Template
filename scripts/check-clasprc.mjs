@@ -103,14 +103,55 @@ if (!parsed) {
 const pickFirst = (...candidates) =>
   candidates.find((value) => typeof value === 'string' && value.trim())?.trim();
 
+/**
+ * Extracts credential fields from the modern `tokens` map (clasp v3+), preferring
+ * the `default` user and falling back to any other token entries.
+ * @param fieldNames field names to try (snake_case or camelCase)
+ * @returns candidate values in priority order
+ */
+const pickFromTokens = (fieldNames) => {
+  const tokens = parsed.tokens;
+  if (!tokens || typeof tokens !== 'object') return [];
+
+  const orderedEntries = [];
+  if (tokens.default && typeof tokens.default === 'object') {
+    orderedEntries.push(tokens.default);
+  }
+  for (const [key, token] of Object.entries(tokens)) {
+    if (key === 'default') continue;
+    if (token && typeof token === 'object') orderedEntries.push(token);
+  }
+
+  const candidates = [];
+  for (const token of orderedEntries) {
+    for (const name of fieldNames) {
+      const value = token[name];
+      if (typeof value === 'string' && value.trim()) {
+        candidates.push(value.trim());
+        break;
+      }
+    }
+  }
+  return candidates;
+};
+
 const refreshToken = pickFirst(
   parsed.refresh_token,
-  parsed.token?.refresh_token
+  parsed.token?.refresh_token,
+  parsed.token?.refreshToken,
+  pickFromTokens(['refresh_token', 'refreshToken'])
 );
-const clientId = pickFirst(parsed.clientId, parsed.oauth2ClientSettings?.clientId);
+const clientId = pickFirst(
+  parsed.clientId,
+  parsed.oauth2ClientSettings?.clientId,
+  parsed.client_id,
+  ...pickFromTokens(['clientId', 'client_id'])
+);
 const clientSecret = pickFirst(
   parsed.clientSecret,
-  parsed.oauth2ClientSettings?.clientSecret
+  parsed.oauth2ClientSettings?.clientSecret,
+  parsed.client_secret,
+  ...pickFromTokens(['clientSecret', 'client_secret'])
 );
 
 const missing = [];
