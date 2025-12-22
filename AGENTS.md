@@ -1,8 +1,10 @@
 # AGENTS.md
 
 
-> 目標：這個 repo 是「Template Repo：一個 Repo = 一個 GAS 專案」。  
 > 所有要部署到 Google Apps Script 的程式碼都用 TypeScript + JSDoc，並由 GitHub Actions 在 push main 後自動部署。
+> 要跑 clasp/CI 時先釐清 `~/.clasprc.json` 才是憑證；
+> **沒有 Script ID 就不要建立/修改 `.clasp.json`**；
+> **寫/改任何 GAS 程式碼或 manifest 前，必須先做 Reference Check（查 vendor library），並在對話/PR 中回報你查了哪些檔案。**
 
 ---
 
@@ -12,6 +14,7 @@
   1. `node -v && npm -v`
   2. `npm install`
   3. 建立 `.clasp.json`（scriptId + rootDir=dist，並 commit）
+     - 若是 monorepo：每個 `apps-script/gas-xxx/` 都要各自有一份可用的 `.clasp.json`
   4. `npx clasp login --status`（沒登入就 `npx clasp login --no-localhost`）
   5. 把 `~/.clasprc.json` 內容放到 GitHub Secrets：`CLASPRC_JSON`
 - 改 code 前後一定要：
@@ -75,7 +78,6 @@ clasp -v
 
 要求：版本號 **≥ 3.1.0**
 
-
 ---
 
 ### 2.3 檢查 `clasp` 登入狀態
@@ -132,11 +134,14 @@ npx clasp login --status
 常見情境：
 
 * 「我在本機能 `clasp push`，但 CI 失敗」
-  → CI 不會跑 `clasp login`，它吃的是 GitHub Secret：`CLASPRC_JSON`（見第 4 節）
+  → CI 不會跑 `clasp login`，它吃的是 GitHub Secret：`CLASPRC_JSON`（見第 4 節 / 第 5.3 節）
 
 ---
 
 ## 3) Repo 結構（你要去哪裡改什麼）
+
+> 下列結構以「單一 GAS 專案資料夾」為單位描述。
+> 若是 monorepo，通常會長得像：`apps-script/gas-xxx/`，而每個 `gas-xxx/` 內都遵循同一套結構。
 
 * `src/`：**所有要部署的 GAS 程式碼（TS）**
 
@@ -177,7 +182,7 @@ npx clasp login --status
 
 ### Step B：把 Repo 連到該 GAS 專案（建立 `.clasp.json`）
 
-在 repo 根目錄：
+在該專案資料夾（單一 repo 時是 repo root；monorepo 時通常是 `apps-script/gas-xxx/`）：
 
 1. 安裝依賴
 
@@ -195,11 +200,13 @@ npx clasp login --status
 
 3. **commit `.clasp.json`**
 
-   * 這是「repo 綁定哪個 GAS 專案」的唯一來源
+   * 這是「這個資料夾綁定哪個 GAS 專案」的唯一來源
 
 ---
 
 ### Step C：本機登入 clasp（產生 `~/.clasprc.json`）
+
+在本機或可互動登入的環境：
 
 ```bash
 npx clasp login --status
@@ -220,6 +227,7 @@ GitHub Repo → Settings → Secrets and variables → Actions：
 * **必填：`CLASPRC_JSON`**
 
   * 值 = 你的 `~/.clasprc.json` 完整內容（整段 JSON）
+  * 這份 secret 會用於 CI 還原 `~/.clasprc.json`，讓 workflow 可以執行 `clasp push`
 
 * **選填：`GAS_DEPLOYMENT_ID`**
 
@@ -259,24 +267,84 @@ GitHub Repo → Settings → Secrets and variables → Actions：
 這是一份最小可落地的 CI/CD 規格，搭配 `.github/workflows/ci.yml` 與 `.github/workflows/deploy.yml`：
 
 * CI/CD 核心規則
+
   * PR / push 一律跑 lint + typecheck + build（必要時再跑 test）
   * 部署只做一件事：把 build 產物 `clasp push` 到 Apps Script
   * 正式發佈（`clasp deploy`）僅允許在 `workflow_dispatch`（手動）或 tag（如 `v1.2.3`）時執行
   * 嚴禁把憑證 commit 進 repo，`.clasprc.json` 必須透過 GitHub Secrets
+
 * 必要 Secrets（GitHub Repo → Settings → Secrets and variables → Actions）
+
   * `CLASPRC_JSON`：你的 `.clasprc.json` 內容（整段 JSON）
   * `CLASP_DEPLOYMENT_ID`（選填）：若要固定更新某個 deployment（常見於 WebApp / Add-on）
+
 * Repo 約定（配合 `src/` 原則）
+
   * `src/`：唯一的人類可編輯部署來源（`.ts` / `.html` / `.css`）
   * `dist/`：build 產物（workflow 產生，可不 commit）
-  * `.clasp.json`：`rootDir` 指向 `dist/`，`scriptId` 可 commit 也可在 workflow 內用 secret 生成
+  * `.clasp.json`：`rootDir` 指向 `dist/`，`scriptId` **必須可用**（可 commit 或在 workflow 內用 secret 生成）
+
 * Workflow 摘要
+
   * `ci.yml`：PR / push（含 main）跑 lint、typecheck、build，測試視 `npm test` 是否存在而定
   * `deploy.yml`：push main 必做 build + `npx clasp push -f`；tag 或手動觸發時再執行 `npx clasp deploy`，並以 `CLASP_DEPLOYMENT_ID`（若有）控制目標 deployment
+
 * 落地前請確認
+
   * `npm run build` 會把 `src/` 編譯到 `dist/`（或你指定的 rootDir）
   * `npx clasp push` 的 rootDir 與 build 產物一致（透過 `.clasp.json` 或 build 流程控制）
   * `CLASPRC_JSON` 已設定成 repo secret，而非寫在檔案或 commit 記錄裡
+
+---
+
+## 5.4（新增）clasp 憑證與 workflow 實際部署機制（CI 會做什麼）
+
+### A) 在本機或可互動登入環境取得「clasp 憑證」
+
+在本機或任何「可以開瀏覽器授權」的環境中登入：
+
+```bash
+npx clasp login --no-localhost
+```
+
+成功後會產生（或更新）：
+
+* `~/.clasprc.json`（**這個才是憑證本體**，不要 commit）
+
+---
+
+### B) 把 `~/.clasprc.json` 全文放到 GitHub Actions secret：`CLASPRC_JSON`
+
+* GitHub Repo → Settings → Secrets and variables → Actions
+* 新增 / 更新 secret：
+
+  * `CLASPRC_JSON` = `~/.clasprc.json` 的「完整 JSON 內容」（整段貼上）
+
+---
+
+### C) 每次部署時，workflow 做的事（重點流程）
+
+1. **還原 `~/.clasprc.json`**
+
+   * workflow 會把 `secrets.CLASPRC_JSON` 寫回 runner 的 `~/.clasprc.json`
+   * 讓後續 `npx clasp ...` 具備登入狀態（CI 不跑互動式 login）
+
+2. **對每個 `apps-script/gas-xxx/` 逐一執行 `clasp push -f`**
+
+   * workflow 會在每個 Apps Script 專案資料夾內執行：
+
+     ```bash
+     npx clasp push -f
+     ```
+
+3. **前提：該資料夾內的 `.clasp.json` 必須「完整可用」**
+
+   * `.clasp.json` 內的 `scriptId` 必須存在且正確
+   * `rootDir` 必須指向正確的 build 產物（通常是 `dist`）
+   * 沒有 `scriptId`（或不可用）就不應該跑部署 / 不應該建立或修改那份 `.clasp.json`
+
+> 重點：`CLASPRC_JSON`（`~/.clasprc.json`）解決的是「身份驗證」；
+> `.clasp.json` 解決的是「這個資料夾要推到哪一個 Script ID」。
 
 ---
 
@@ -340,13 +408,13 @@ export function registerGlobalFunctions(): void {
 ### CI 失敗：Missing `CLASPRC_JSON`
 
 * 代表 GitHub Secrets 沒設定 `CLASPRC_JSON` 或內容為空
-* 請照第 4 節 Step D 設定
+* 請照第 4 節 Step D / 第 5.4 節設定
 
 ---
 
 ### CI 失敗：Missing `.clasp.json`
 
-* 代表 repo 還沒綁定 GAS 專案
+* 代表該專案資料夾還沒綁定 GAS 專案
 * 請 `cp .clasp.json.example .clasp.json` 並填上 scriptId，然後 commit
 
 ---
@@ -373,9 +441,3 @@ export function registerGlobalFunctions(): void {
 * [ ] `npm run build` 通過（dist 正常生成）
 * [ ] 若改到 `src/**` 或 `appsscript.json`，PR Body 已填 `## Reference Check`
 * [ ] 沒有把任何 secret/token/refresh token 寫進 repo（包含貼在檔案、測試碼、註解）
-
-```
-
-如果你希望我再幫你把這份文件「更像 AI 操作手冊」一點（例如：加上 **Agent 行為規範：只改 `src/**`、不要改 `dist/**`、遇到缺少 scriptId 要先停**，或把每個步驟做成可直接 copy/paste 的 command blocks），我也可以直接替你做第二版。
-::contentReference[oaicite:0]{index=0}
-```
