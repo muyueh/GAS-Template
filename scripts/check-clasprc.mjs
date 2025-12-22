@@ -13,6 +13,7 @@ const argv = process.argv.slice(2);
 let credentialsPath = path.join(os.homedir(), '.clasprc.json');
 let shouldPrint = false;
 let shouldPrintBase64 = false;
+let wasBase64Source = false;
 
 for (let index = 0; index < argv.length; index += 1) {
   const arg = argv[index];
@@ -67,22 +68,49 @@ if (!raw) {
   );
 }
 
-let data;
-try {
-  data = JSON.parse(raw);
-} catch (error) {
-  const reason = error instanceof Error ? error.message : String(error);
-  fail(`Failed to parse ${credentialsPath} as JSON: ${reason}`);
+const attemptParse = (text) => {
+  try {
+    return JSON.parse(text);
+  } catch {
+    return undefined;
+  }
+};
+
+let parsed = attemptParse(raw);
+let normalizedRaw = raw;
+
+if (!parsed) {
+  try {
+    const decoded = Buffer.from(raw, 'base64').toString('utf8').trim();
+    if (decoded) {
+      parsed = attemptParse(decoded);
+      if (parsed) {
+        normalizedRaw = decoded;
+        wasBase64Source = true;
+      }
+    }
+  } catch {
+    // Ignore base64 decoding errors; we'll fail below if parsing still fails.
+  }
+}
+
+if (!parsed) {
+  fail(
+    `Failed to parse ${credentialsPath} as JSON or base64-encoded JSON. If you pasted the Base64 block from 'npm run check:clasprc -- --print --base64', ensure it stayed intact.`
+  );
 }
 
 const pickFirst = (...candidates) =>
   candidates.find((value) => typeof value === 'string' && value.trim())?.trim();
 
-const refreshToken = pickFirst(data.refresh_token, data.token?.refresh_token);
-const clientId = pickFirst(data.clientId, data.oauth2ClientSettings?.clientId);
+const refreshToken = pickFirst(
+  parsed.refresh_token,
+  parsed.token?.refresh_token
+);
+const clientId = pickFirst(parsed.clientId, parsed.oauth2ClientSettings?.clientId);
 const clientSecret = pickFirst(
-  data.clientSecret,
-  data.oauth2ClientSettings?.clientSecret
+  parsed.clientSecret,
+  parsed.oauth2ClientSettings?.clientSecret
 );
 
 const missing = [];
@@ -98,16 +126,18 @@ if (missing.length) {
   );
 }
 
-console.log('✅ CLASPRC_JSON source looks valid and contains required tokens.');
+console.log(
+  `✅ CLASPRC_JSON source looks valid and contains required tokens (${wasBase64Source ? 'base64' : 'JSON'}).`
+);
 
 if (shouldPrint) {
   console.log('-----BEGIN CLASPRC_JSON-----');
-  console.log(raw);
+  console.log(normalizedRaw);
   console.log('-----END CLASPRC_JSON-----');
 }
 
 if (shouldPrintBase64) {
-  const encoded = Buffer.from(raw, 'utf8').toString('base64');
+  const encoded = Buffer.from(normalizedRaw, 'utf8').toString('base64');
   console.log('-----BEGIN CLASPRC_JSON_BASE64-----');
   console.log(encoded);
   console.log('-----END CLASPRC_JSON_BASE64-----');
