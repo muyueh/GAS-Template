@@ -1,7 +1,5 @@
-# AGENTS.md（給 Codex / Claude Code / ChatGPT 的工作手冊）
+# AGENTS.md
 
-> 目標：**一個 Repo = 一個 Google Apps Script（GAS）專案**。  
-> 每次新專案都用 GitHub Template 生成一份新的 Repo → 完全隔離、避免 Active Flag 切換成本、也降低隱私外洩風險。
 
 ---
 
@@ -12,14 +10,8 @@
 2. **所有 exported 的函式 / 類別 / 會被外部呼叫的入口點，必須寫 JSDoc**  
    - 函式：描述用途、邊界條件、`@param`、`@returns`、必要時 `@throws`。  
    - 類別：說明責任與不變量。  
-   - 內部 callback（如 `map(() => ...)`）不強制，但建議在複雜時補註解。
 3. **觸發器、選單、WebApp 等入口點必須是「全域函式」**  
    - 我們用 `src/lib/registerGlobals.ts` 將函式掛到 `globalThis`，才能被 Apps Script 用字串名稱呼叫。
-4. **Repo 是唯一真實來源（Source of Truth）**  
-   - 不要在 Apps Script 線上編輯器手改程式碼（會造成雲端版本與 Repo 分叉）。
-5. **不要把任何憑證 / Token / 私密資料 commit 進 repo**  
-   - CI 的 clasp 憑證只放 GitHub Actions Secrets（repo-level）。
-
 ---
 
 ## 2) Repo 結構（你要去哪裡改什麼）
@@ -34,7 +26,6 @@
 - `scripts/build.mjs`：esbuild 打包（TS → `dist/Code.js`）
 - `.clasp.json`：每個專案自己的 scriptId（**在新 repo 裡自己建立/commit**）
 - `shared/google-apps-script-api-reference/`：離線參考資料（給 agent 做 Reference Check 用）
-
 ---
 
 ## 3) 新專案建立流程（Use this template 後要做的事）
@@ -62,8 +53,6 @@
 ### Step C：本機登入 clasp（產生 ~/.clasprc.json）
 1. `npx clasp login`  
 2. 成功後你會得到 `~/.clasprc.json`（**不要 commit**）
-
-> 如果 Google 提示你要啟用 Apps Script API，照指示啟用即可。
 
 ### Step D：設定 GitHub Actions Secrets（repo-level）
 在 GitHub Repo → Settings → Secrets and variables → Actions：
