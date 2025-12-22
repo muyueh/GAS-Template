@@ -21,6 +21,7 @@
 - 改 code 前後一定要：
   - `npm run check`
   - 改到 `src/**` 或 `appsscript.json` → PR Body 填 `## Reference Check`
+  - 更新 build/打包流程時，若需要讓入口點成為全域函式，請在 `scripts/build.mjs` 透過 esbuild 的 `footer.js` 注入 wrappers，確保 doGet/onOpen/helloWorld 等 Apps Script 入口點在 IIFE 外層仍為全域可見。
 
 ### 常見錯誤對應表（極短版）
 - `clasp login` 無法開瀏覽器：改用 `npx clasp login --no-localhost`，把 URL 給使用者開，使用者回貼完整 redirect URL。
