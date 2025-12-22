@@ -16,7 +16,8 @@
   3. 建立 `.clasp.json`（scriptId + rootDir=dist，並 commit）
      - 若是 monorepo：每個 `apps-script/gas-xxx/` 都要各自有一份可用的 `.clasp.json`
   4. `npx clasp login --status`（沒登入就 `npx clasp login --no-localhost`）
-  5. 把 `~/.clasprc.json` 內容放到 GitHub Secrets：`CLASPRC_JSON`
+  5. 把「**完整且非空**」的 `~/.clasprc.json` 內容放到 GitHub Secrets：`CLASPRC_JSON`
+  6. 確認 `.clasp.json` 已填入**真實的** `scriptId`（不能留 `REPLACE_WITH_SCRIPT_ID`），否則 deploy workflow 會失敗
 - 改 code 前後一定要：
   - `npm run check`
   - 改到 `src/**` 或 `appsscript.json` → PR Body 填 `## Reference Check`
@@ -195,10 +196,10 @@ npx clasp login --status
    * `cp .clasp.json.example .clasp.json`
    * 編輯 `.clasp.json`：
 
-     * `scriptId`: 貼上你的 Script ID
+     * `scriptId`: **必須**貼上你的 Script ID（不能留白或 `REPLACE_WITH_SCRIPT_ID`，不然 deploy workflow 會直接失敗）
      * `rootDir`: 必須是 `dist`
 
-3. **commit `.clasp.json`**
+3. **commit `.clasp.json`**（確保其中的 `scriptId` 已填好且可用）
 
    * 這是「這個資料夾綁定哪個 GAS 專案」的唯一來源
 
@@ -226,8 +227,9 @@ GitHub Repo → Settings → Secrets and variables → Actions：
 
 * **必填：`CLASPRC_JSON`**
 
-  * 值 = 你的 `~/.clasprc.json` 完整內容（整段 JSON）
+  * 值 = 你的 `~/.clasprc.json` **完整且非空**內容（整段 JSON）
   * 這份 secret 會用於 CI 還原 `~/.clasprc.json`，讓 workflow 可以執行 `clasp push`
+  * deploy workflow 會檢查此 secret 是否存在／非空，缺少時會直接失敗並提示補上
 
 * **選填：`GAS_DEPLOYMENT_ID`**
 
@@ -324,12 +326,18 @@ npx clasp login --no-localhost
 
 ### C) 每次部署時，workflow 做的事（重點流程）
 
-1. **還原 `~/.clasprc.json`**
+1. **驗證 `.clasp.json` 與 `scriptId`**
 
-   * workflow 會把 `secrets.CLASPRC_JSON` 寫回 runner 的 `~/.clasprc.json`
-   * 讓後續 `npx clasp ...` 具備登入狀態（CI 不跑互動式 login）
+   * CI 會先檢查 `.clasp.json` 是否存在且 `scriptId` 不是空白或 `REPLACE_WITH_SCRIPT_ID`
+   * 若不符合，workflow 會直接失敗並提示補齊
 
-2. **對每個 `apps-script/gas-xxx/` 逐一執行 `clasp push -f`**
+2. **還原 `~/.clasprc.json`**
+
+   * workflow 會把 **非空** `secrets.CLASPRC_JSON` 寫回 runner 的 `~/.clasprc.json`
+   * 若 secret 遺失或為空，workflow 會直接失敗並提示你補上完整的 `~/.clasprc.json`
+   * 成功後，後續 `npx clasp ...` 具備登入狀態（CI 不跑互動式 login）
+
+3. **對每個 `apps-script/gas-xxx/` 逐一執行 `clasp push -f`**
 
    * workflow 會在每個 Apps Script 專案資料夾內執行：
 
@@ -337,7 +345,7 @@ npx clasp login --no-localhost
      npx clasp push -f
      ```
 
-3. **前提：該資料夾內的 `.clasp.json` 必須「完整可用」**
+4. **前提：該資料夾內的 `.clasp.json` 必須「完整可用」**
 
    * `.clasp.json` 內的 `scriptId` 必須存在且正確
    * `rootDir` 必須指向正確的 build 產物（通常是 `dist`）

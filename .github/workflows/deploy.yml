@@ -24,6 +24,22 @@ jobs:
           node-version: "20"
           cache: "npm"
 
+      - name: Validate clasp config
+        run: |
+          if [ ! -f ".clasp.json" ]; then
+            echo "::error::.clasp.json is missing. Copy .clasp.json.example and set scriptId before deploying."
+            exit 1
+          fi
+
+          SCRIPT_ID=$(node -e "const fs = require('fs'); const path = '.clasp.json'; const json = JSON.parse(fs.readFileSync(path, 'utf8')); console.log((json.scriptId || '').trim());")
+
+          if [ -z "$SCRIPT_ID" ] || [ "$SCRIPT_ID" = "REPLACE_WITH_SCRIPT_ID" ]; then
+            echo "::error::.clasp.json scriptId is missing. Update scriptId with your Apps Script project ID and commit before deploying."
+            exit 1
+          fi
+
+          echo "Detected scriptId in .clasp.json; continuing deployment."
+
       - name: Install
         run: npm ci
 
@@ -34,8 +50,12 @@ jobs:
         env:
           CLASPRC_JSON: ${{ secrets.CLASPRC_JSON }}
         run: |
-          test -n "$CLASPRC_JSON"
-          echo "$CLASPRC_JSON" > "$HOME/.clasprc.json"
+          if [ -z "${CLASPRC_JSON:-}" ]; then
+            echo "::error::Missing CLASPRC_JSON secret. Run 'npx clasp login --no-localhost' locally and add the resulting ~/.clasprc.json content as the CLASPRC_JSON repository secret."
+            exit 1
+          fi
+
+          printf '%s' "$CLASPRC_JSON" > "$HOME/.clasprc.json"
           node -e "JSON.parse(require('fs').readFileSync(process.env.HOME+'/.clasprc.json','utf8')); console.log('✅ .clasprc.json OK');"
 
       - name: clasp push
