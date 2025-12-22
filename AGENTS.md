@@ -16,7 +16,7 @@
   3. 建立 `.clasp.json`（scriptId + rootDir=dist，並 commit）
      - 若是 monorepo：每個 `apps-script/gas-xxx/` 都要各自有一份可用的 `.clasp.json`
   4. `npx clasp login --status`（沒登入就 `npx clasp login --no-localhost`）
-  5. 把「**完整且非空**」的 `~/.clasprc.json` 內容放到 GitHub Secrets：`CLASPRC_JSON`
+  5. 把「**完整且非空**」的 `~/.clasprc.json` 內容放到 GitHub Secrets：`CLASPRC_JSON`（預設貼 `npm run check:clasprc -- --print --base64` 輸出的 Base64 區塊；純 JSON 也可）
   6. 確認 `.clasp.json` 已填入**真實的** `scriptId`（不能留 `REPLACE_WITH_SCRIPT_ID`），否則 deploy workflow 會失敗
 - 改 code 前後一定要：
   - `npm run check`
@@ -32,10 +32,11 @@
 2. 使用者授權後，複製完整的 redirect URL（含 `code=`）貼回終端機，由 Codex/Agent 繼續流程。
 3. 確認 `npx clasp login --status` 已顯示登入帳號。
 4. Codex/Agent 以清晰的分隔符列印本機 `~/.clasprc.json` 的**完整且非空**內容，避免前後空白或遺漏（例如用 `-----BEGIN CLASPRC_JSON-----` / `-----END CLASPRC_JSON-----` 包住原始 JSON）。
-5. 打開 GitHub Repo → **Settings → Secrets and variables → Actions**，新增/更新 `CLASPRC_JSON`，值為第 4 步的完整 JSON。
+5. 打開 GitHub Repo → **Settings → Secrets and variables → Actions**，新增/更新 `CLASPRC_JSON`，值為第 4 步的完整 JSON（推薦貼 `npm run check:clasprc -- --print --base64` 的 Base64 區塊，workflow 會同時支援 Base64 / 純 JSON）。
 
 注意：
 - `CLASPRC_JSON` 是 CI 還原 `~/.clasprc.json` 的唯一來源，缺少或為空會讓 CI 直接失敗。
+- 預設以 Base64 儲存 `CLASPRC_JSON`（用 `npm run check:clasprc -- --print --base64` 取得），但 workflow 也會接受純 JSON。
 - 憑證是機器層級設定，換環境或 Fork 後都要重跑登入。
 - 若憑證外洩或不確定安全性，請重新執行 `npx clasp login --no-localhost` 產生新 `~/.clasprc.json`，並更新 GitHub Secret。
 - CI/CD 會檢查 `CLASPRC_JSON` 是否存在且非空；未設定會使 workflow 直接失敗。
@@ -245,7 +246,7 @@ GitHub Repo → Settings → Secrets and variables → Actions：
 
 * **必填：`CLASPRC_JSON`**
 
-  * 值 = 你的 `~/.clasprc.json` **完整且非空**內容（整段 JSON）
+  * 值 = 你的 `~/.clasprc.json` **完整且非空**內容（預設貼 `npm run check:clasprc -- --print --base64` 的 Base64 區塊，純 JSON 也可）
   * 這份 secret 會用於 CI 還原 `~/.clasprc.json`，讓 workflow 可以執行 `clasp push`
   * deploy workflow 會檢查此 secret 是否存在／非空，缺少時會直接失敗並提示補上
 
@@ -295,7 +296,7 @@ GitHub Repo → Settings → Secrets and variables → Actions：
 
 * 必要 Secrets（GitHub Repo → Settings → Secrets and variables → Actions）
 
-  * `CLASPRC_JSON`：你的 `.clasprc.json` 內容（整段 JSON）
+  * `CLASPRC_JSON`：你的 `.clasprc.json` 內容（預設貼 Base64 區塊，純 JSON 也可）
   * `CLASP_DEPLOYMENT_ID`（選填）：若要固定更新某個 deployment（常見於 WebApp / Add-on）
 
 * Repo 約定（配合 `src/` 原則）
@@ -336,7 +337,7 @@ npx clasp login --no-localhost
 ### B) 把 `~/.clasprc.json` 全文放到 GitHub Actions secret：`CLASPRC_JSON`
 
 * GitHub Repo → Settings → Secrets and variables → Actions
-* 新增 / 更新 secret：
+* 新增 / 更新 secret：`CLASPRC_JSON`（Base64 為預設，純 JSON 也可；Base64 較不怕貼上被截斷）
 
   * `CLASPRC_JSON` = `~/.clasprc.json` 的「完整 JSON 內容」（整段貼上）
 

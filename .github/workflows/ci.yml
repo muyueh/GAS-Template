@@ -33,32 +33,77 @@ jobs:
         env:
           CLASPRC_JSON: ${{ secrets.CLASPRC_JSON }}
         run: |
-          if [ -z "${CLASPRC_JSON:-}" ]; then
-            echo "::error::Missing CLASPRC_JSON secret. Run 'npx clasp login --no-localhost' locally and add the resulting ~/.clasprc.json content as the CLASPRC_JSON repository secret."
-            exit 1
-          fi
-
-          printf '%s' "$CLASPRC_JSON" > "$HOME/.clasprc.json"
-
           node - <<'NODE'
           const fs = require('fs');
           const path = `${process.env.HOME}/.clasprc.json`;
+          const source = process.env.CLASPRC_JSON ?? '';
 
-          const raw = fs.readFileSync(path, 'utf8').trim();
-          if (!raw) {
-            throw new Error('CLASPRC_JSON is set but empty. Paste the full contents of ~/.clasprc.json from `npx clasp login --no-localhost` (raw JSON, not base64).');
+          if (!source.trim()) {
+            throw new Error(
+              "Missing CLASPRC_JSON secret. Run 'npx clasp login --no-localhost' and paste the Base64 block from 'npm run check:clasprc -- --print --base64' into the CLASPRC_JSON repository secret (raw JSON is also accepted)."
+            );
           }
 
-          let data;
-          try {
-            data = JSON.parse(raw);
-          } catch (error) {
-            throw new Error(`Failed to parse ~/.clasprc.json: ${error instanceof Error ? error.message : String(error)}. Ensure CLASPRC_JSON contains the exact JSON output from clasp with no extra characters.`);
-          }
+          const attemptParse = (value) => {
+            try {
+              return JSON.parse(value);
+            } catch (error) {
+              return undefined;
+            }
+          };
 
-          const refreshToken = data.refresh_token || (data.token && data.token.refresh_token);
-          const clientId = data.clientId || (data.oauth2ClientSettings && data.oauth2ClientSettings.clientId);
-          const clientSecret = data.clientSecret || (data.oauth2ClientSettings && data.oauth2ClientSettings.clientSecret);
+          const decodeClasprc = (raw) => {
+            const trimmed = raw.trim();
+            if (!trimmed) {
+              throw new Error(
+                'CLASPRC_JSON is set but empty. Paste the Base64 block from `npm run check:clasprc -- --print --base64` (preferred) or the raw ~/.clasprc.json content.'
+              );
+            }
+
+            let decodedRaw = trimmed;
+            let format = 'json';
+            let data = attemptParse(decodedRaw);
+
+            if (!data) {
+              try {
+                const maybeDecoded = Buffer.from(trimmed, 'base64')
+                  .toString('utf8')
+                  .trim();
+                if (maybeDecoded) {
+                  const maybeParsed = attemptParse(maybeDecoded);
+                  if (maybeParsed) {
+                    decodedRaw = maybeDecoded;
+                    data = maybeParsed;
+                    format = 'base64';
+                  }
+                }
+              } catch (error) {
+                // continue to unified failure below
+              }
+            }
+
+            if (!data) {
+              throw new Error(
+                'Failed to parse CLASPRC_JSON as JSON or base64-encoded JSON. Regenerate with `npm run check:clasprc -- --print --base64` and paste the Base64 block into the secret.'
+              );
+            }
+
+            return { data, decodedRaw, format };
+          };
+
+          const { data, decodedRaw, format } = decodeClasprc(source);
+
+          fs.writeFileSync(path, decodedRaw, 'utf8');
+
+          const pickFirst = (...candidates) =>
+            candidates.find((value) => typeof value === 'string' && value.trim())?.trim();
+
+          const refreshToken = pickFirst(data.refresh_token, data.token?.refresh_token);
+          const clientId = pickFirst(data.clientId, data.oauth2ClientSettings?.clientId);
+          const clientSecret = pickFirst(
+            data.clientSecret,
+            data.oauth2ClientSettings?.clientSecret
+          );
 
           const missing = [];
           if (!refreshToken) missing.push('refresh_token');
@@ -66,10 +111,16 @@ jobs:
           if (!clientSecret) missing.push('clientSecret');
 
           if (missing.length) {
-            throw new Error(`Incomplete clasp credentials: missing ${missing.join(', ')}. Re-run 'npx clasp login --no-localhost' and paste the entire ~/.clasprc.json as the CLASPRC_JSON secret (no truncation).`);
+            throw new Error(
+              `Incomplete clasp credentials: missing ${missing.join(
+                ', '
+              )}. Re-run 'npx clasp login --no-localhost' and paste the Base64 block from \`npm run check:clasprc -- --print --base64\` into the CLASPRC_JSON secret (raw JSON also works).`
+            );
           }
 
-          console.log('✅ CLASPRC_JSON looks valid and contains required tokens.');
+          console.log(
+            `✅ CLASPRC_JSON looks valid and contains required tokens (${format}).`
+          );
           NODE
 
       - name: Skip secret validation for non-main runs
