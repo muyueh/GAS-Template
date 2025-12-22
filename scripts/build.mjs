@@ -4,6 +4,28 @@ import { cpSync, existsSync, mkdirSync, readdirSync, rmSync, statSync } from 'no
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+const entrypointWrappers = `
+/**
+ * Apps Script entrypoints (top-level wrappers).
+ * 這些必須是全域 function 宣告，Apps Script 才能發現/呼叫。
+ */
+function doGet(e) {
+  return globalThis.__GAS_TEMPLATE__.doGet(e);
+}
+function onOpen(e) {
+  return globalThis.__GAS_TEMPLATE__.onOpen(e);
+}
+function helloWorld() {
+  return globalThis.__GAS_TEMPLATE__.helloWorld();
+}
+function createQuestionTypeShowcase(title) {
+  return globalThis.__GAS_TEMPLATE__.createQuestionTypeShowcase(title);
+}
+function createTenQuestionForm(title) {
+  return globalThis.__GAS_TEMPLATE__.createTenQuestionForm(title);
+}
+`;
+
 /**
  * Recursively copies files from one directory to another.
  * @param fromDir Source directory path.
@@ -60,7 +82,8 @@ async function main() {
     outfile: path.join(distDir, 'Code.js'),
     tsconfig: path.join(projectRoot, 'tsconfig.json'),
     sourcemap: false,
-    minify: false
+    minify: false,
+    footer: { js: entrypointWrappers }
   });
 
   // Copy Apps Script manifest
