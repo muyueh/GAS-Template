@@ -16,6 +16,6 @@
 5. 把 `npm run check:clasprc` 印出的區塊貼到 GitHub Secrets：`CLASPRC_JSON`（預設貼 Base64 區塊，純 JSON 也可）
 6. push 到 `main` → 會自動部署
 
-> `npm run check:clasprc -- --print --base64` 會驗證 `~/.clasprc.json` 是否包含 `refresh_token` / `clientId` / `clientSecret`，並以 `-----BEGIN/END CLASPRC_JSON-----` 包起來方便複製，同時提供 Base64 版本以避免貼上時被工具轉義。Missing 欄位時會直接報錯，避免在 CI 才發現 Secret 缺欄位。
+> `npm run check:clasprc -- --print --base64` 會驗證 `~/.clasprc.json` 是否包含 refresh token 與 OAuth client ID/secret。clasp v3 會把欄位存在 `tokens.default.client_id/client_secret`（snake_case），舊版則是 `clientId/clientSecret` 或 `oauth2ClientSettings`；腳本會同時接受這兩種格式，並以 `-----BEGIN/END CLASPRC_JSON-----` 包起來方便複製，同時提供 Base64 版本以避免貼上時被工具轉義。Missing 欄位時會直接報錯，避免在 CI 才發現 Secret 缺欄位。
 
 完整流程與規範請看：**AGENTS.md**
