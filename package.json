@@ -13,7 +13,8 @@
     "build": "node scripts/build.mjs",
     "check": "npm run lint && npm run typecheck && npm run build",
     "deploy": "npm run build && npx clasp push -f",
-    "clasp:status": "npx clasp login --status"
+    "clasp:status": "npx clasp login --status",
+    "check:clasprc": "node scripts/check-clasprc.mjs"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.2",

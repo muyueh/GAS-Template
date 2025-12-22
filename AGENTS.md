@@ -480,3 +480,9 @@ export function registerGlobalFunctions(): void {
   2. 使用者於瀏覽器授權後回傳 redirect URL，內含授權 code。
   3. 將該 redirect URL 貼回同一個登入流程，完成授權。
 * 結果：clasp 登入成功。
+
+### 2025-02-23：CLASPRC_JSON 驗證缺少欄位
+
+* 狀況：CI 回報 CLASPRC_JSON 缺少 `refresh_token` / `clientId` / `clientSecret`，推測是複製貼上時被截斷。
+* 處置：請執行 `npm run check:clasprc -- --print --base64` 重新驗證本機 `~/.clasprc.json`，並重新複製指令輸出的區塊（純文字或 Base64 皆可）到 GitHub Secrets：`CLASPRC_JSON`。
+* 備註：Base64 區塊可避免部分工具自動轉義或刪除換行。
