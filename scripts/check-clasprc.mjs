@@ -139,7 +139,7 @@ const refreshToken = pickFirst(
   parsed.refresh_token,
   parsed.token?.refresh_token,
   parsed.token?.refreshToken,
-  pickFromTokens(['refresh_token', 'refreshToken'])
+  ...pickFromTokens(['refresh_token', 'refreshToken'])
 );
 const clientId = pickFirst(
   parsed.clientId,
