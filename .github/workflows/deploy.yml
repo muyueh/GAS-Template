@@ -1,0 +1,54 @@
+name: Deploy to Apps Script
+
+on:
+  push:
+    branches: ["main"]
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+concurrency:
+  group: "apps-script-deploy"
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Install
+        run: npm ci
+
+      - name: Build
+        run: npm run build
+
+      - name: Setup clasp auth
+        env:
+          CLASPRC_JSON: ${{ secrets.CLASPRC_JSON }}
+        run: |
+          test -n "$CLASPRC_JSON"
+          echo "$CLASPRC_JSON" > "$HOME/.clasprc.json"
+          node -e "JSON.parse(require('fs').readFileSync(process.env.HOME+'/.clasprc.json','utf8')); console.log('✅ .clasprc.json OK');"
+
+      - name: clasp push
+        run: npx clasp push -f
+
+      - name: clasp deploy (tag/workflow_dispatch only)
+        if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch'
+        env:
+          CLASP_DEPLOYMENT_ID: ${{ secrets.CLASP_DEPLOYMENT_ID }}
+        run: |
+          DESC="CI deploy ${GITHUB_REF_NAME:-manual} @ ${GITHUB_SHA}"
+          if [ -n "$CLASP_DEPLOYMENT_ID" ]; then
+            npx clasp deploy -i "$CLASP_DEPLOYMENT_ID" -d "$DESC"
+          else
+            npx clasp deploy -d "$DESC"
+          fi

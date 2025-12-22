@@ -254,6 +254,32 @@ GitHub Repo → Settings → Secrets and variables → Actions：
 
 ---
 
+## 5.3 GitHub Actions 部署（clasp）
+
+這是一份最小可落地的 CI/CD 規格，搭配 `.github/workflows/ci.yml` 與 `.github/workflows/deploy.yml`：
+
+* CI/CD 核心規則
+  * PR / push 一律跑 lint + typecheck + build（必要時再跑 test）
+  * 部署只做一件事：把 build 產物 `clasp push` 到 Apps Script
+  * 正式發佈（`clasp deploy`）僅允許在 `workflow_dispatch`（手動）或 tag（如 `v1.2.3`）時執行
+  * 嚴禁把憑證 commit 進 repo，`.clasprc.json` 必須透過 GitHub Secrets
+* 必要 Secrets（GitHub Repo → Settings → Secrets and variables → Actions）
+  * `CLASPRC_JSON`：你的 `.clasprc.json` 內容（整段 JSON）
+  * `CLASP_DEPLOYMENT_ID`（選填）：若要固定更新某個 deployment（常見於 WebApp / Add-on）
+* Repo 約定（配合 `src/` 原則）
+  * `src/`：唯一的人類可編輯部署來源（`.ts` / `.html` / `.css`）
+  * `dist/`：build 產物（workflow 產生，可不 commit）
+  * `.clasp.json`：`rootDir` 指向 `dist/`，`scriptId` 可 commit 也可在 workflow 內用 secret 生成
+* Workflow 摘要
+  * `ci.yml`：PR / push（含 main）跑 lint、typecheck、build，測試視 `npm test` 是否存在而定
+  * `deploy.yml`：push main 必做 build + `npx clasp push -f`；tag 或手動觸發時再執行 `npx clasp deploy`，並以 `CLASP_DEPLOYMENT_ID`（若有）控制目標 deployment
+* 落地前請確認
+  * `npm run build` 會把 `src/` 編譯到 `dist/`（或你指定的 rootDir）
+  * `npx clasp push` 的 rootDir 與 build 產物一致（透過 `.clasp.json` 或 build 流程控制）
+  * `CLASPRC_JSON` 已設定成 repo secret，而非寫在檔案或 commit 記錄裡
+
+---
+
 ## 6) 入口點（Triggers / Menus / WebApp）怎麼加
 
 ### 規則
