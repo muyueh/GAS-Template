@@ -98,11 +98,49 @@ jobs:
           const pickFirst = (...candidates) =>
             candidates.find((value) => typeof value === 'string' && value.trim())?.trim();
 
-          const refreshToken = pickFirst(data.refresh_token, data.token?.refresh_token);
-          const clientId = pickFirst(data.clientId, data.oauth2ClientSettings?.clientId);
+          const pickFromTokens = (fieldNames) => {
+            const tokens = data.tokens;
+            if (!tokens || typeof tokens !== 'object') return [];
+
+            const ordered = [];
+            if (tokens.default && typeof tokens.default === 'object') ordered.push(tokens.default);
+            for (const [key, token] of Object.entries(tokens)) {
+              if (key === 'default') continue;
+              if (token && typeof token === 'object') ordered.push(token);
+            }
+
+            const out = [];
+            for (const token of ordered) {
+              for (const name of fieldNames) {
+                const value = token[name];
+                if (typeof value === 'string' && value.trim()) {
+                  out.push(value.trim());
+                  break;
+                }
+              }
+            }
+            return out;
+          };
+
+          const refreshToken = pickFirst(
+            data.refresh_token,
+            data.token?.refresh_token,
+            data.token?.refreshToken,
+            ...pickFromTokens(['refresh_token', 'refreshToken'])
+          );
+
+          const clientId = pickFirst(
+            data.clientId,
+            data.oauth2ClientSettings?.clientId,
+            data.client_id,
+            ...pickFromTokens(['clientId', 'client_id'])
+          );
+
           const clientSecret = pickFirst(
             data.clientSecret,
-            data.oauth2ClientSettings?.clientSecret
+            data.oauth2ClientSettings?.clientSecret,
+            data.client_secret,
+            ...pickFromTokens(['clientSecret', 'client_secret'])
           );
 
           const missing = [];
