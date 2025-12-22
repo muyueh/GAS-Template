@@ -6,7 +6,62 @@ on:
     branches: ["main"]
 
 jobs:
+  guardrails:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate clasp config
+        run: |
+          if [ ! -f ".clasp.json" ]; then
+            echo "::error::.clasp.json is missing. Copy .clasp.json.example and set scriptId before working on GAS code."
+            exit 1
+          fi
+
+          SCRIPT_ID=$(node -e "const fs = require('fs'); const path = '.clasp.json'; const json = JSON.parse(fs.readFileSync(path, 'utf8')); console.log((json.scriptId || '').trim());")
+
+          if [ -z "$SCRIPT_ID" ] || [ "$SCRIPT_ID" = "REPLACE_WITH_SCRIPT_ID" ]; then
+            echo "::error::.clasp.json scriptId is missing or still REPLACE_WITH_SCRIPT_ID. Update scriptId with your Apps Script project ID before continuing."
+            exit 1
+          fi
+
+          echo "Detected scriptId in .clasp.json; continuing checks."
+
+      - name: Validate clasp auth secret
+        if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+        env:
+          CLASPRC_JSON: ${{ secrets.CLASPRC_JSON }}
+        run: |
+          if [ -z "${CLASPRC_JSON:-}" ]; then
+            echo "::error::Missing CLASPRC_JSON secret. Run 'npx clasp login --no-localhost' locally and add the resulting ~/.clasprc.json content as the CLASPRC_JSON repository secret."
+            exit 1
+          fi
+
+          printf '%s' "$CLASPRC_JSON" > "$HOME/.clasprc.json"
+
+          node - <<'NODE'
+const fs = require('fs');
+const path = `${process.env.HOME}/.clasprc.json`;
+const data = JSON.parse(fs.readFileSync(path, 'utf8'));
+
+const refreshToken = data.refresh_token || (data.token && data.token.refresh_token);
+const clientId = data.clientId || (data.oauth2ClientSettings && data.oauth2ClientSettings.clientId);
+const clientSecret = data.clientSecret || (data.oauth2ClientSettings && data.oauth2ClientSettings.clientSecret);
+
+if (!refreshToken || !clientId || !clientSecret) {
+  throw new Error('Incomplete clasp credentials: refresh_token, clientId, and clientSecret are required.');
+}
+
+console.log('✅ CLASPRC_JSON looks valid and contains required tokens.');
+NODE
+
+      - name: Skip secret validation for forked PRs
+        if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository
+        run: echo "::warning::Skipping CLASPRC_JSON validation for forked pull request (secrets are not provided)."
+
   ci:
+    needs: guardrails
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
