@@ -25,6 +25,12 @@ const entrypointWrappers = [
   'function createTenQuestionForm(title) {',
   '  return globalThis.__GAS_TEMPLATE__.createTenQuestionForm(title);',
   '}',
+  'function createSlidesFeatureShowcase(title) {',
+  '  return globalThis.__GAS_TEMPLATE__.createSlidesFeatureShowcase(title);',
+  '}',
+  'function syncUberReceipts() {',
+  '  return globalThis.__GAS_TEMPLATE__.syncUberReceipts();',
+  '}',
   ''
 ].join('\n');
 

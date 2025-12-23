@@ -5,10 +5,19 @@ import { createQuestionTypeShowcase, createTenQuestionForm } from '../features/f
 import { createSlidesFeatureShowcase } from '../features/slidesShowcase';
 import { syncUberReceipts } from '../features/uberReceipts';
 
-/**
- * The global object shape we use to attach Apps Script entrypoints.
- */
-type GlobalScope = Record<string, unknown>;
+type Entrypoints = {
+  helloWorld: typeof helloWorld;
+  createQuestionTypeShowcase: typeof createQuestionTypeShowcase;
+  createTenQuestionForm: typeof createTenQuestionForm;
+  createSlidesFeatureShowcase: typeof createSlidesFeatureShowcase;
+  syncUberReceipts: typeof syncUberReceipts;
+  onOpen: typeof onOpen;
+  doGet: typeof doGet;
+};
+
+type GlobalScope = typeof globalThis & {
+  __GAS_TEMPLATE__?: Partial<Entrypoints>;
+};
 
 /**
  * Exposes selected functions to the Apps Script global scope.
@@ -19,19 +28,21 @@ type GlobalScope = Record<string, unknown>;
  * @returns Nothing.
  */
 export function registerGlobalFunctions(): void {
-  const g = globalThis as unknown as GlobalScope;
+  const g = globalThis as GlobalScope;
+  const namespace = g.__GAS_TEMPLATE__ ?? {};
 
   // ---- Always-on demo entrypoints (safe to keep) ----
-  g.helloWorld = helloWorld;
-  g.createQuestionTypeShowcase = createQuestionTypeShowcase;
-  g.createTenQuestionForm = createTenQuestionForm;
-  g.createSlidesFeatureShowcase = createSlidesFeatureShowcase;
-  g.syncUberReceipts = syncUberReceipts;
+  namespace.helloWorld = helloWorld;
+  namespace.createQuestionTypeShowcase = createQuestionTypeShowcase;
+  namespace.createTenQuestionForm = createTenQuestionForm;
+  namespace.createSlidesFeatureShowcase = createSlidesFeatureShowcase;
+  namespace.syncUberReceipts = syncUberReceipts;
 
   // ---- Optional entrypoints (comment out if you don't need them) ----
-  g.onOpen = onOpen;
-  g.doGet = doGet;
+  namespace.onOpen = onOpen;
+  namespace.doGet = doGet;
 
+  g.__GAS_TEMPLATE__ = namespace;
   // Add your own exports here, e.g.:
   // g.runDailyJob = runDailyJob;
 
