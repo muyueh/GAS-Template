@@ -2,6 +2,7 @@ import { doGet } from '../features/webapp';
 import { onOpen } from '../features/sheetsMenu';
 import { helloWorld } from '../features/helloWorld';
 import { createQuestionTypeShowcase, createTenQuestionForm } from '../features/formBuilder';
+import { createSlidesFeatureShowcase } from '../features/slidesShowcase';
 
 /**
  * The global object shape we use to attach Apps Script entrypoints.
@@ -23,6 +24,7 @@ export function registerGlobalFunctions(): void {
   g.helloWorld = helloWorld;
   g.createQuestionTypeShowcase = createQuestionTypeShowcase;
   g.createTenQuestionForm = createTenQuestionForm;
+  g.createSlidesFeatureShowcase = createSlidesFeatureShowcase;
 
   // ---- Optional entrypoints (comment out if you don't need them) ----
   g.onOpen = onOpen;
