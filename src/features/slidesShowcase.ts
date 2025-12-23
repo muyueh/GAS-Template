@@ -129,3 +129,18 @@ export function createSlidesFeatureShowcase(
 
   return presentation;
 }
+
+/**
+ * Apps Script entrypoint that builds the Slides feature showcase and logs the deck URL.
+ * Exposed to Apps Script as `createSlidesFeatureShowcase` via the bundler bootstrap.
+ * @param title The presentation title to use. Defaults to a descriptive showcase title.
+ * @returns The newly created Slides presentation containing all demonstration slides.
+ */
+export function createSlidesFeatureShowcaseEntrypoint(
+  title = 'Google Slides 10 項功能示範',
+): GoogleAppsScript.Slides.Presentation {
+  const presentation = createSlidesFeatureShowcase(title);
+  Logger.log(`Slides showcase created: ${presentation.getUrl()}`);
+
+  return presentation;
+}

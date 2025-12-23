@@ -1,5 +1,7 @@
 # AGENTS.md
 
+⚠️ 開發任何會在 Apps Script 執行的功能（如 createSlidesFeatureShowcase 等產生文件/投影片的腳本）時，務必確認已在 `src/lib/registerGlobals.ts` 把入口函式掛到 `globalThis`，並維持可被 Run/觸發器直接呼叫的全域名稱；沒有掛上入口點的功能視同無法使用。
+
 
 > 所有要部署到 Google Apps Script 的程式碼都用 TypeScript + JSDoc，並由 GitHub Actions 在 push main 後自動部署。
 > 要跑 clasp/CI 時先釐清 `~/.clasprc.json` 才是憑證；
