@@ -46,7 +46,9 @@ export function createSlidesFeatureShowcase(
   const tableTitle = tableSlide.insertTextBox('4) 表格展示');
   tableTitle.setTop(40).setLeft(60).setWidth(520).setHeight(40);
   const table = tableSlide.insertTable(4, 3);
-  table.setLeft(60).setTop(100).setWidth(520);
+  // Some page elements (like tables) do not support explicit width updates; only set position.
+  // The table auto-sizes to its content, so positioning is sufficient for layout.
+  table.setLeft(60).setTop(100);
   table.getCell(0, 0).getText().setText('項目');
   table.getCell(0, 1).getText().setText('狀態');
   table.getCell(0, 2).getText().setText('負責人');
