@@ -188,8 +188,9 @@ function parseReceiptDetails(message: GoogleAppsScript.Gmail.GmailMessage): {
   const plainBody = message.getPlainBody();
 
   const licensePlate =
-    plainBody.match(/Rental company:\s*([^\n\r]+)/i)?.[1].trim() ??
+    plainBody.match(/License Plate:\s*([A-Za-z0-9-]+)/i)?.[1].trim() ??
     plainBody.match(/車牌[:：]\s*([^\n\r]+)/)?.[1].trim() ??
+    plainBody.match(/Rental company:\s*([^\n\r]+)/i)?.[1].trim() ??
     '未知';
 
   const fare =
