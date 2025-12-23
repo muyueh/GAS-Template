@@ -125,9 +125,8 @@ export function createSlidesFeatureShowcase(
   const videoSlide = presentation.appendSlide(SlidesApp.PredefinedLayout.BLANK);
   const videoTitle = videoSlide.insertTextBox('10) 內嵌影片');
   videoTitle.setTop(40).setLeft(60).setWidth(520).setHeight(40);
-  videoSlide
-    .insertVideo('https://www.youtube.com/watch?v=Qto4uR3viiY', 80, 140, 480, 270)
-    .select();
+  const showcaseVideoUrl = 'https://www.youtube.com/watch?v=aqz-KE-bpKQ';
+  videoSlide.insertVideo(showcaseVideoUrl, 80, 140, 480, 270).select();
 
   return presentation;
 }
