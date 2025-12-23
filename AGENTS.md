@@ -1,6 +1,17 @@
 # AGENTS.md
 
-⚠️ 開發任何會在 Apps Script 執行的功能（如 createSlidesFeatureShowcase 等產生文件/投影片的腳本）時，務必確認已在 `src/lib/registerGlobals.ts` 把入口函式掛到 `globalThis`，並維持可被 Run/觸發器直接呼叫的全域名稱；沒有掛上入口點的功能視同無法使用。
+⚠️ 必須遵守的「入口點防呆」：所有會在 Apps Script 執行的功能（含 createSlidesFeatureShowcase 等產生文件/投影片的腳本）**同時**滿足下列兩件事才算可用，缺一即視同壞掉：
+1) 在 `src/lib/registerGlobals.ts` 把入口函式掛到 `globalThis.__GAS_TEMPLATE__`（與 bundler footer 對應的命名空間一致）。
+2) 確認 `scripts/build.mjs` 的 footer 有對應的全域 wrapper（如 `function createSlidesFeatureShowcase(...) { return globalThis.__GAS_TEMPLATE__.createSlidesFeatureShowcase(...); }`），Apps Script 才能找到並呼叫。
+→ 每次調整入口點或新增功能，一定要同步檢查這兩個檔案，並在 PR 說明你已確認這兩層一致。
+
+### 🧾 入口點與發版前必看 Checklist
+- [ ] 入口函式已掛到 `globalThis.__GAS_TEMPLATE__`（`src/lib/registerGlobals.ts`）。
+- [ ] `scripts/build.mjs` footer 已含對應的全域 wrapper；名稱與 namespace 完全一致。
+- [ ] 如新增/修改 `src/**` 或 `appsscript.json`，已完成 Reference Check 並寫入 PR Body 的 `## Reference Check` 區塊。
+- [ ] `npm run lint && npm run typecheck && npm run build` 通過（若僅改文件，需在 PR 註記未執行的原因）。
+- [ ] `.clasp.json` 已填入真實 scriptId（不得為空或 placeholder），且未在沒有 scriptId 時建立/修改。
+- [ ] 未將憑證（含 `~/.clasprc.json`）或任何密鑰寫入 repo；CI 用的 `CLASPRC_JSON` 已更新且非空。
 
 
 > 所有要部署到 Google Apps Script 的程式碼都用 TypeScript + JSDoc，並由 GitHub Actions 在 push main 後自動部署。
