@@ -3,6 +3,7 @@ import { onOpen } from '../features/sheetsMenu';
 import { helloWorld } from '../features/helloWorld';
 import { createQuestionTypeShowcase, createTenQuestionForm } from '../features/formBuilder';
 import { createSlidesFeatureShowcase } from '../features/slidesShowcase';
+import { createSheetsComponentShowcase } from '../features/sheetsComponentsShowcase';
 import { syncUberReceipts } from '../features/uberReceipts';
 
 type Entrypoints = {
@@ -10,6 +11,7 @@ type Entrypoints = {
   createQuestionTypeShowcase: typeof createQuestionTypeShowcase;
   createTenQuestionForm: typeof createTenQuestionForm;
   createSlidesFeatureShowcase: typeof createSlidesFeatureShowcase;
+  createSheetsComponentShowcase: typeof createSheetsComponentShowcase;
   syncUberReceipts: typeof syncUberReceipts;
   onOpen: typeof onOpen;
   doGet: typeof doGet;
@@ -36,6 +38,7 @@ export function registerGlobalFunctions(): void {
   namespace.createQuestionTypeShowcase = createQuestionTypeShowcase;
   namespace.createTenQuestionForm = createTenQuestionForm;
   namespace.createSlidesFeatureShowcase = createSlidesFeatureShowcase;
+  namespace.createSheetsComponentShowcase = createSheetsComponentShowcase;
   namespace.syncUberReceipts = syncUberReceipts;
 
   // ---- Optional entrypoints (comment out if you don't need them) ----
