@@ -51,8 +51,9 @@ export function createSheetsComponentShowcase(
 
   const components: string[] = [];
 
+  // Keep merged ranges out of column A to avoid conflicts with the frozen first column.
   // 1) Styled and merged title banner.
-  const titleRange = sheet.getRange('A1:H1');
+  const titleRange = sheet.getRange('B1:H1');
   titleRange.merge();
   titleRange
     .setValue(title)
@@ -63,7 +64,7 @@ export function createSheetsComponentShowcase(
   components.push('Merged title banner with styling');
 
   // 2) Quick-start helper link (rich text hyperlink).
-  const helperRange = sheet.getRange('A2:H2');
+  const helperRange = sheet.getRange('B2:H2');
   helperRange.merge();
   const helperText = SpreadsheetApp.newRichTextValue()
     .setText('開啟 Sheets 說明文件與最佳實務')
@@ -79,7 +80,7 @@ export function createSheetsComponentShowcase(
   components.push('In-cell Sheets logo image');
 
   // 4) Highlighted instruction note.
-  const instructionRange = sheet.getRange('A3:D3');
+  const instructionRange = sheet.getRange('B3:E3');
   instructionRange
     .merge()
     .setValue('這張表展示 20 種元件，勾選完成或調整數值可觸發不同效果。')
