@@ -1,0 +1,431 @@
+name: GAS Bootstrap
+
+on:
+  push:
+    branches: ["main"]
+    paths:
+      - ".gas/request.json"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: gas-bootstrap
+  cancel-in-progress: false
+
+jobs:
+  bootstrap:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Parse bootstrap request
+        id: request
+        run: |
+          node - <<'NODE'
+          const fs = require('fs');
+          const path = '.gas/request.json';
+          const defaults = { rootDir: 'dist', type: 'standalone' };
+
+          const outputs = {
+            active: false,
+            reason: 'request file not found',
+            mode: '',
+            title: '',
+            parentId: '',
+            existingScriptId: '',
+            type: defaults.type,
+            rootDir: defaults.rootDir,
+          };
+
+          const emit = (key, value) => {
+            outputs[key] = value;
+            const safe = String(value ?? '')
+              .replace(/%/g, '%25')
+              .replace(/\n/g, '%0A')
+              .replace(/\r/g, '%0D');
+            fs.appendFileSync(process.env.GITHUB_OUTPUT, `${key}=${safe}\n`);
+          };
+
+          const summarize = () => {
+            for (const [key, value] of Object.entries(outputs)) {
+              if (typeof value === 'boolean') {
+                console.log(`${key}: ${value}`);
+              } else {
+                console.log(`${key}: ${value ?? ''}`);
+              }
+            }
+          };
+
+          if (!fs.existsSync(path)) {
+            emit('active', false);
+            emit('reason', 'request.json is missing');
+            summarize();
+            process.exit(0);
+          }
+
+          let data;
+          try {
+            data = JSON.parse(fs.readFileSync(path, 'utf8'));
+          } catch (error) {
+            emit('active', false);
+            emit('reason', `failed to parse request.json: ${error.message}`);
+            summarize();
+            process.exit(0);
+          }
+
+          const enabled = data.enabled !== false;
+          const kind = data.kind || '';
+          const mode = data.mode || '';
+          const type = data.type || defaults.type;
+          const rootDir = data.rootDir || defaults.rootDir;
+
+          emit('requestKind', kind);
+          emit('requestEnabled', String(enabled));
+
+          if (kind !== 'gas.bootstrap') {
+            emit('active', false);
+            emit('reason', `unsupported kind: ${kind || '<missing>'}`);
+            summarize();
+            process.exit(0);
+          }
+
+          if (!enabled) {
+            emit('active', false);
+            emit('reason', 'request is disabled');
+            summarize();
+            process.exit(0);
+          }
+
+          if (!['create', 'link'].includes(mode)) {
+            emit('active', false);
+            emit('reason', `unsupported mode: ${mode || '<missing>'}`);
+            summarize();
+            process.exit(0);
+          }
+
+          if (mode === 'link' && !(data.existingScriptId || '').trim()) {
+            emit('active', false);
+            emit('reason', 'existingScriptId is required for link mode');
+            summarize();
+            process.exit(0);
+          }
+
+          emit('active', true);
+          emit('reason', '');
+          emit('mode', mode);
+          emit('title', data.title || 'GAS Template Project');
+          emit('parentId', data.parentId || '');
+          emit('existingScriptId', (data.existingScriptId || '').trim());
+          emit('type', type);
+          emit('rootDir', rootDir);
+          summarize();
+          NODE
+
+      - name: Abort (no active bootstrap request)
+        if: steps.request.outputs.active != 'true'
+        run: |
+          {
+            echo "### ⚠️ GAS bootstrap skipped" >> "$GITHUB_STEP_SUMMARY"
+            echo "- Reason: ${{ steps.request.outputs.reason }}" >> "$GITHUB_STEP_SUMMARY"
+          }
+
+      - name: Materialize clasp credentials
+        if: steps.request.outputs.active == 'true'
+        env:
+          CLASPRC_JSON: ${{ secrets.CLASPRC_JSON }}
+        run: |
+          node - <<'NODE'
+          const fs = require('fs');
+          const path = `${process.env.HOME}/.clasprc.json`;
+          const source = process.env.CLASPRC_JSON ?? '';
+
+          if (!source.trim()) {
+            throw new Error(
+              "Missing CLASPRC_JSON secret. Run 'npx clasp login --no-localhost' and paste the Base64 block from 'npm run check:clasprc -- --print --base64' into the CLASPRC_JSON repository secret (raw JSON is also accepted)."
+            );
+          }
+
+          const attemptParse = (value) => {
+            try {
+              return JSON.parse(value);
+            } catch (error) {
+              return undefined;
+            }
+          };
+
+          const decodeClasprc = (raw) => {
+            const trimmed = raw.trim();
+            if (!trimmed) {
+              throw new Error(
+                'CLASPRC_JSON is set but empty. Paste the Base64 block from `npm run check:clasprc -- --print --base64` (preferred) or the raw ~/.clasprc.json content.'
+              );
+            }
+
+            let decodedRaw = trimmed;
+            let format = 'json';
+            let data = attemptParse(decodedRaw);
+
+            if (!data) {
+              try {
+                const maybeDecoded = Buffer.from(trimmed, 'base64')
+                  .toString('utf8')
+                  .trim();
+                if (maybeDecoded) {
+                  const maybeParsed = attemptParse(maybeDecoded);
+                  if (maybeParsed) {
+                    decodedRaw = maybeDecoded;
+                    data = maybeParsed;
+                    format = 'base64';
+                  }
+                }
+              } catch (error) {
+                // continue to unified failure below
+              }
+            }
+
+            if (!data) {
+              throw new Error(
+                'Failed to parse CLASPRC_JSON as JSON or base64-encoded JSON. Regenerate with `npm run check:clasprc -- --print --base64` and paste the Base64 block into the secret.'
+              );
+            }
+
+            return { data, decodedRaw, format };
+          };
+
+          const { data, decodedRaw, format } = decodeClasprc(source);
+
+          fs.writeFileSync(path, decodedRaw, 'utf8');
+
+          const pickFirst = (...candidates) =>
+            candidates.find((value) => typeof value === 'string' && value.trim())?.trim();
+
+          const pickFromTokens = (fieldNames) => {
+            const tokens = data.tokens;
+            if (!tokens || typeof tokens !== 'object') return [];
+
+            const ordered = [];
+            if (tokens.default && typeof tokens.default === 'object') ordered.push(tokens.default);
+            for (const [key, token] of Object.entries(tokens)) {
+              if (key === 'default') continue;
+              if (token && typeof token === 'object') ordered.push(token);
+            }
+
+            const out = [];
+            for (const token of ordered) {
+              for (const name of fieldNames) {
+                const value = token[name];
+                if (typeof value === 'string' && value.trim()) {
+                  out.push(value.trim());
+                  break;
+                }
+              }
+            }
+            return out;
+          };
+
+          const refreshToken = pickFirst(
+            data.refresh_token,
+            data.token?.refresh_token,
+            data.token?.refreshToken,
+            ...pickFromTokens(['refresh_token', 'refreshToken'])
+          );
+
+          const clientId = pickFirst(
+            data.clientId,
+            data.oauth2ClientSettings?.clientId,
+            data.client_id,
+            ...pickFromTokens(['clientId', 'client_id'])
+          );
+
+          const clientSecret = pickFirst(
+            data.clientSecret,
+            data.oauth2ClientSettings?.clientSecret,
+            data.client_secret,
+            ...pickFromTokens(['clientSecret', 'client_secret'])
+          );
+
+          const missing = [];
+          if (!refreshToken) missing.push('refresh_token');
+          if (!clientId) missing.push('clientId');
+          if (!clientSecret) missing.push('clientSecret');
+
+          if (missing.length) {
+            throw new Error(
+              `Incomplete clasp credentials: missing ${missing.join(
+                ', '
+              )}. Re-run 'npx clasp login --no-localhost' and paste the Base64 block from \`npm run check:clasprc -- --print --base64\` into the CLASPRC_JSON secret (raw JSON also works).`
+            );
+          }
+
+          console.log(
+            `✅ CLASPRC_JSON looks valid and contains required tokens (${format}).`
+          );
+          NODE
+
+      - name: Verify clasp login
+        if: steps.request.outputs.active == 'true'
+        run: npx clasp login --status
+
+      - name: Create or link Apps Script project
+        id: script
+        if: steps.request.outputs.active == 'true'
+        env:
+          MODE: ${{ steps.request.outputs.mode }}
+          TITLE: ${{ steps.request.outputs.title }}
+          TYPE: ${{ steps.request.outputs.type }}
+          PARENT_ID: ${{ steps.request.outputs.parentId }}
+          EXISTING_SCRIPT_ID: ${{ steps.request.outputs.existingScriptId }}
+          ROOT_DIR: ${{ steps.request.outputs.rootDir }}
+        run: |
+          set -euo pipefail
+
+          ensure_script_id() {
+            node - <<'NODE'
+            const fs = require('fs');
+            const data = JSON.parse(fs.readFileSync('.clasp.json', 'utf8'));
+            const id = (data.scriptId || '').trim();
+            if (!id) {
+              throw new Error('scriptId missing after clasp operation.');
+            }
+            console.log(id);
+            NODE
+          }
+
+          if [ "$MODE" = "create" ]; then
+            args=(create --type "${TYPE:-standalone}" --title "${TITLE:-GAS Template Project}" --rootDir "${ROOT_DIR:-dist}")
+            if [ -n "${PARENT_ID:-}" ]; then
+              args+=("--parentId" "$PARENT_ID")
+            fi
+            echo "Running: npx clasp ${args[*]}"
+            npx clasp "${args[@]}"
+            SCRIPT_ID=$(ensure_script_id)
+          else
+            if [ -z "${EXISTING_SCRIPT_ID:-}" ]; then
+              echo "::error::existingScriptId is required for link mode"
+              exit 1
+            fi
+            node - <<'NODE'
+            const fs = require('fs');
+            const scriptId = process.env.EXISTING_SCRIPT_ID?.trim();
+            const rootDir = process.env.ROOT_DIR || 'dist';
+            if (!scriptId) throw new Error('existingScriptId is required for link mode');
+            fs.writeFileSync('.clasp.json', JSON.stringify({ scriptId, rootDir }, null, 2));
+            NODE
+            SCRIPT_ID=$(ensure_script_id)
+          fi
+
+          echo "scriptId=$SCRIPT_ID" >> "$GITHUB_OUTPUT"
+          echo "rootDir=${ROOT_DIR:-dist}" >> "$GITHUB_OUTPUT"
+
+      - name: Update state and request files
+        if: steps.request.outputs.active == 'true'
+        env:
+          MODE: ${{ steps.request.outputs.mode }}
+          ROOT_DIR: ${{ steps.script.outputs.rootDir }}
+          SCRIPT_ID: ${{ steps.script.outputs.scriptId }}
+          CLASP_DEPLOYMENT_ID: ${{ secrets.CLASP_DEPLOYMENT_ID }}
+        run: |
+          node - <<'NODE'
+          const fs = require('fs');
+          const path = '.gas/state.json';
+          const requestPath = '.gas/request.json';
+          const now = new Date().toISOString();
+
+          const scriptId = (process.env.SCRIPT_ID || '').trim();
+          if (!scriptId) {
+            throw new Error('scriptId missing when writing state.json');
+          }
+
+          const rootDir = process.env.ROOT_DIR || 'dist';
+          const mode = process.env.MODE || '';
+
+          let request = {};
+          try {
+            request = JSON.parse(fs.readFileSync(requestPath, 'utf8'));
+          } catch (error) {
+            console.warn('Could not read request.json; continuing with empty metadata.', error);
+          }
+
+          const deploymentId = process.env.CLASP_DEPLOYMENT_ID || '';
+
+          const state = {
+            version: 1,
+            auth: {
+              configured: true,
+              verified: true,
+              verifiedAt: now,
+            },
+            gas: {
+              scriptId,
+              rootDir,
+              linkedAt: now,
+              mode,
+            },
+            deploy: {
+              deploymentConfigured: Boolean(deploymentId),
+              deploymentId,
+            },
+            request: {
+              lastRequestKind: request.kind || null,
+              lastMode: request.mode || null,
+              lastProcessedAt: now,
+              source: request,
+            },
+          };
+
+          fs.mkdirSync('.gas', { recursive: true });
+          fs.writeFileSync(path, JSON.stringify(state, null, 2));
+
+          request.enabled = false;
+          request.fulfilledAt = now;
+          request.lastScriptId = scriptId;
+          fs.writeFileSync(requestPath, JSON.stringify(request, null, 2));
+          NODE
+
+      - name: Summarize bootstrap results
+        if: steps.request.outputs.active == 'true'
+        env:
+          MODE: ${{ steps.request.outputs.mode }}
+          SCRIPT_ID: ${{ steps.script.outputs.scriptId }}
+        run: |
+          {
+            echo "### ✅ GAS bootstrap ready" >> "$GITHUB_STEP_SUMMARY"
+            echo "- Mode: ${MODE}" >> "$GITHUB_STEP_SUMMARY"
+            echo "- Script ID: ${SCRIPT_ID}" >> "$GITHUB_STEP_SUMMARY"
+            echo "- Files to commit: .clasp.json, .gas/state.json, .gas/request.json" >> "$GITHUB_STEP_SUMMARY"
+            echo "- Next: merge the PR opened by this workflow to persist the link" >> "$GITHUB_STEP_SUMMARY"
+          }
+
+      - name: Open PR with bootstrap artifacts
+        if: steps.request.outputs.active == 'true'
+        uses: peter-evans/create-pull-request@v7
+        with:
+          branch: bot/gas-bootstrap
+          commit-message: "chore: apply GAS bootstrap request"
+          title: "Bootstrap Apps Script project (${{ steps.request.outputs.mode }})"
+          body: |
+            ## Summary
+            - Processed GAS bootstrap request (`${{ steps.request.outputs.mode }}`)
+            - Script ID: `${{ steps.script.outputs.scriptId }}`
+            - Updated `.clasp.json`, `.gas/state.json`, and `.gas/request.json` (disabled after processing)
+
+            ## Next steps
+            - Review and merge this PR to persist the bootstrap results
+          add-paths: |
+            .clasp.json
+            .gas/state.json
+            .gas/request.json

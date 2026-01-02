@@ -24,23 +24,117 @@ jobs:
           node-version: "20"
           cache: "npm"
 
-      - name: Validate clasp config
+      - name: Evaluate deploy readiness
+        id: gas
         run: |
-          if [ ! -f ".clasp.json" ]; then
-            echo "::error::.clasp.json is missing. Copy .clasp.json.example and set scriptId before deploying."
-            exit 1
-          fi
+          node - <<'NODE'
+          const fs = require('fs');
+          const statePath = '.gas/state.json';
+          const claspPath = '.clasp.json';
 
-          SCRIPT_ID=$(node -e "const fs = require('fs'); const path = '.clasp.json'; const json = JSON.parse(fs.readFileSync(path, 'utf8')); console.log((json.scriptId || '').trim());")
+          const readScriptId = (value) => {
+            const id = (value || '').trim();
+            return id && id !== 'REPLACE_WITH_SCRIPT_ID' ? id : '';
+          };
 
-          if [ -z "$SCRIPT_ID" ] || [ "$SCRIPT_ID" = "REPLACE_WITH_SCRIPT_ID" ]; then
-            echo "::error::.clasp.json scriptId is missing. Update scriptId with your Apps Script project ID and commit before deploying."
-            exit 1
-          fi
+          let ready = false;
+          let scriptId = '';
+          let reason = '';
+          let rootDir = 'dist';
 
-          echo "Detected scriptId in .clasp.json; continuing deployment."
+          if (fs.existsSync(statePath)) {
+            try {
+              const state = JSON.parse(fs.readFileSync(statePath, 'utf8'));
+              const candidate = readScriptId(state.gas?.scriptId);
+              const verified = Boolean(state.auth?.verified);
+              if (candidate && verified) {
+                ready = true;
+                scriptId = candidate;
+                rootDir = state.gas?.rootDir || rootDir;
+              } else {
+                reason = 'state.json present but missing verified auth or scriptId';
+              }
+            } catch (error) {
+              reason = `state.json invalid: ${error.message}`;
+            }
+          }
+
+          if (!ready && fs.existsSync(claspPath)) {
+            try {
+              const clasp = JSON.parse(fs.readFileSync(claspPath, 'utf8'));
+              const candidate = readScriptId(clasp.scriptId);
+              if (candidate) {
+                ready = true;
+                scriptId = candidate;
+                rootDir = clasp.rootDir || rootDir;
+              } else if (!reason) {
+                reason = '.clasp.json present but missing scriptId';
+              }
+            } catch (error) {
+              reason = `.clasp.json invalid: ${error.message}`;
+            }
+          }
+
+          if (!ready && !reason) {
+            reason = 'No bootstrap state or .clasp.json with a valid scriptId found';
+          }
+
+          const outputs = {
+            ready,
+            scriptId,
+            rootDir,
+            reason,
+          };
+
+          const out = Object.entries(outputs)
+            .map(([key, value]) => `${key}=${String(value).replace(/%/g, '%25').replace(/\n/g, '%0A').replace(/\r/g, '%0D')}`)
+            .join('\n');
+          fs.appendFileSync(process.env.GITHUB_OUTPUT, `${out}\n`);
+
+          if (ready) {
+            console.log(`Deploy ready: scriptId=${scriptId}, rootDir=${rootDir}`);
+          } else {
+            console.warn(`Deploy skipped: ${reason}`);
+          }
+          NODE
+
+      - name: Skip deploy (not ready)
+        if: steps.gas.outputs.ready != 'true'
+        run: |
+          {
+            echo "### ⚠️ Deploy skipped" >> "$GITHUB_STEP_SUMMARY"
+            echo "- Reason: ${{ steps.gas.outputs.reason }}" >> "$GITHUB_STEP_SUMMARY"
+            echo "- Action: merge the bootstrap PR from gas-bootstrap.yml or add a valid .clasp.json" >> "$GITHUB_STEP_SUMMARY"
+          }
+          exit 0
+
+      - name: Ensure clasp config exists
+        if: steps.gas.outputs.ready == 'true'
+        env:
+          SCRIPT_ID: ${{ steps.gas.outputs.scriptId }}
+          ROOT_DIR: ${{ steps.gas.outputs.rootDir }}
+        run: |
+          node - <<'NODE'
+          const fs = require('fs');
+          const path = '.clasp.json';
+          const scriptId = (process.env.SCRIPT_ID || '').trim();
+          const rootDir = process.env.ROOT_DIR || 'dist';
+          if (!scriptId) {
+            throw new Error('scriptId missing from readiness evaluation');
+          }
+          let existingRoot = rootDir;
+          try {
+            const current = JSON.parse(fs.readFileSync(path, 'utf8'));
+            existingRoot = current.rootDir || existingRoot;
+          } catch (error) {
+            // overwrite with known good values
+          }
+          fs.writeFileSync(path, JSON.stringify({ scriptId, rootDir: existingRoot }, null, 2));
+          console.log(`Using scriptId ${scriptId} with rootDir ${existingRoot}`);
+          NODE
 
       - name: Validate clasp auth secret
+        if: steps.gas.outputs.ready == 'true'
         env:
           CLASPRC_JSON: ${{ secrets.CLASPRC_JSON }}
         run: |
@@ -173,16 +267,19 @@ jobs:
           NODE
 
       - name: Install
+        if: steps.gas.outputs.ready == 'true'
         run: npm ci
 
       - name: Build
+        if: steps.gas.outputs.ready == 'true'
         run: npm run build
 
       - name: clasp push
+        if: steps.gas.outputs.ready == 'true'
         run: npx clasp push -f
 
       - name: clasp deploy (tag/workflow_dispatch only)
-        if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch'
+        if: steps.gas.outputs.ready == 'true' && (startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch')
         env:
           CLASP_DEPLOYMENT_ID: ${{ secrets.CLASP_DEPLOYMENT_ID }}
         run: |

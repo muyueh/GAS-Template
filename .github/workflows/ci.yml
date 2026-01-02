@@ -12,24 +12,79 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Validate clasp config
+      - name: Evaluate GAS readiness or bootstrap request
+        id: gas
         run: |
-          if [ ! -f ".clasp.json" ]; then
-            echo "::error::.clasp.json is missing. Copy .clasp.json.example and set scriptId before working on GAS code."
-            exit 1
-          fi
+          node - <<'NODE'
+          const fs = require('fs');
+          const claspPath = '.clasp.json';
+          const requestPath = '.gas/request.json';
 
-          SCRIPT_ID=$(node -e "const fs = require('fs'); const path = '.clasp.json'; const json = JSON.parse(fs.readFileSync(path, 'utf8')); console.log((json.scriptId || '').trim());")
+          const readScriptId = (value) => {
+            const id = (value || '').trim();
+            if (!id || id === 'REPLACE_WITH_SCRIPT_ID') return '';
+            return id;
+          };
 
-          if [ -z "$SCRIPT_ID" ] || [ "$SCRIPT_ID" = "REPLACE_WITH_SCRIPT_ID" ]; then
-            echo "::error::.clasp.json scriptId is missing or still REPLACE_WITH_SCRIPT_ID. Update scriptId with your Apps Script project ID before continuing."
-            exit 1
-          fi
+          let scriptId = '';
+          let hasClasp = false;
+          if (fs.existsSync(claspPath)) {
+            try {
+              const json = JSON.parse(fs.readFileSync(claspPath, 'utf8'));
+              scriptId = readScriptId(json.scriptId);
+              hasClasp = true;
+            } catch (error) {
+              console.error('::error::.clasp.json is not valid JSON:', error);
+              process.exit(1);
+            }
+          }
 
-          echo "Detected scriptId in .clasp.json; continuing checks."
+          let requestKind = '';
+          let requestEnabled = false;
+          if (fs.existsSync(requestPath)) {
+            try {
+              const request = JSON.parse(fs.readFileSync(requestPath, 'utf8'));
+              requestKind = request.kind || '';
+              requestEnabled = request.enabled !== false;
+            } catch (error) {
+              console.error('::error::.gas/request.json is not valid JSON:', error);
+              process.exit(1);
+            }
+          }
+
+          const ready = Boolean(scriptId);
+          const hasBootstrap = requestKind === 'gas.bootstrap';
+
+          if (!ready && !hasBootstrap) {
+            console.error('::error::Missing valid .clasp.json (scriptId), and no bootstrap request found at .gas/request.json.');
+            process.exit(1);
+          }
+
+          if (!ready && hasBootstrap) {
+            const suffix = requestEnabled ? '' : ' (request is currently disabled)';
+            console.warn(`::warning::Bootstrap request detected; skipping .clasp.json validation${suffix}.`);
+          }
+
+          const outputs = {
+            ready,
+            scriptId,
+            hasClasp,
+            requestKind,
+            requestEnabled,
+          };
+
+          const out = Object.entries(outputs)
+            .map(([key, value]) => `${key}=${String(value).replace(/%/g, '%25').replace(/\n/g, '%0A').replace(/\r/g, '%0D')}`)
+            .join('\n');
+          fs.appendFileSync(process.env.GITHUB_OUTPUT, `${out}\n`);
+
+          if (ready) {
+            console.log(`Detected scriptId in .clasp.json; continuing checks.`);
+          }
+          NODE
 
       - name: Validate clasp auth secret
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        if: steps.gas.outputs.ready == 'true' && github.event_name == 'push' && github.ref == 'refs/heads/main'
         env:
           CLASPRC_JSON: ${{ secrets.CLASPRC_JSON }}
         run: |

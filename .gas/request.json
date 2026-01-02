@@ -1,0 +1,12 @@
+{
+  "version": 1,
+  "kind": "gas.bootstrap",
+  "mode": "create",
+  "enabled": false,
+  "title": "GAS Template Project",
+  "type": "standalone",
+  "parentId": "",
+  "rootDir": "dist",
+  "existingScriptId": "",
+  "notes": "Set enabled to true and update fields, then merge to main to ask Actions to create or link the Apps Script project."
+}
