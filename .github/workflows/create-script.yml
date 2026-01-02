@@ -1,0 +1,144 @@
+name: Create Apps Script project
+
+on:
+  workflow_dispatch:
+    inputs:
+      title:
+        description: "Title for the new Apps Script project"
+        required: false
+        default: "GAS Template - Generated"
+      parentId:
+        description: "Optional Drive parent ID (e.g., a folder) for the project"
+        required: false
+
+jobs:
+  create-script:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Materialize clasp credentials
+        env:
+          CLASPRC_JSON: ${{ secrets.CLASPRC_JSON }}
+        run: |
+          node - <<'NODE'
+          const fs = require('fs');
+          const path = `${process.env.HOME}/.clasprc.json`;
+          const source = process.env.CLASPRC_JSON ?? '';
+
+          if (!source.trim()) {
+            throw new Error(
+              "Missing CLASPRC_JSON secret. Run 'npx clasp login --no-localhost' and paste the Base64 block from 'npm run check:clasprc -- --print --base64' into the CLASPRC_JSON repository secret (raw JSON is also accepted)."
+            );
+          }
+
+          const attemptParse = (value) => {
+            try {
+              return JSON.parse(value);
+            } catch (error) {
+              return undefined;
+            }
+          };
+
+          const decodeClasprc = (raw) => {
+            const trimmed = raw.trim();
+            if (!trimmed) {
+              throw new Error(
+                'CLASPRC_JSON is set but empty. Paste the Base64 block from `npm run check:clasprc -- --print --base64` (preferred) or the raw ~/.clasprc.json content.'
+              );
+            }
+
+            let decodedRaw = trimmed;
+            let format = 'json';
+            let data = attemptParse(decodedRaw);
+
+            if (!data) {
+              try {
+                const maybeDecoded = Buffer.from(trimmed, 'base64')
+                  .toString('utf8')
+                  .trim();
+                if (maybeDecoded) {
+                  const maybeParsed = attemptParse(maybeDecoded);
+                  if (maybeParsed) {
+                    decodedRaw = maybeDecoded;
+                    data = maybeParsed;
+                    format = 'base64';
+                  }
+                }
+              } catch (error) {
+                // continue to unified failure below
+              }
+            }
+
+            if (!data) {
+              throw new Error(
+                'Failed to parse CLASPRC_JSON as JSON or base64-encoded JSON. Regenerate with `npm run check:clasprc -- --print --base64` and paste the Base64 block into the secret.'
+              );
+            }
+
+            return { data, decodedRaw, format };
+          };
+
+          const { decodedRaw, format } = decodeClasprc(source);
+
+          fs.writeFileSync(path, decodedRaw, 'utf8');
+
+          console.log(`✅ CLASPRC_JSON looks valid (${format}).`);
+          NODE
+
+      - name: Backup existing clasp config (if any)
+        run: |
+          if [ -f ".clasp.json" ]; then
+            mv .clasp.json .clasp.json.bak
+            echo "::warning::Existing .clasp.json moved to .clasp.json.bak for this run."
+          fi
+
+      - name: Create Apps Script project
+        env:
+          TITLE: ${{ inputs.title }}
+          PARENT_ID: ${{ inputs.parentId }}
+        run: |
+          set -euo pipefail
+          args=(create --type standalone --title "${TITLE:-GAS Template - Generated}" --rootDir dist)
+          if [ -n "${PARENT_ID:-}" ]; then
+            args+=("--parentId" "$PARENT_ID")
+          fi
+          echo "Running: npx clasp ${args[*]}"
+          npx clasp "${args[@]}"
+
+      - name: Read generated script ID
+        id: script-id
+        run: |
+          set -euo pipefail
+          SCRIPT_ID=$(node -e "const fs = require('fs'); const data = JSON.parse(fs.readFileSync('.clasp.json', 'utf8')); console.log((data.scriptId || '').trim());")
+          if [ -z "$SCRIPT_ID" ]; then
+            echo "::error::Failed to read scriptId from generated .clasp.json"
+            exit 1
+          fi
+          echo "scriptId=$SCRIPT_ID" >> "$GITHUB_OUTPUT"
+          {
+            echo "### ✅ Apps Script project created"
+            echo ""
+            echo "- Script ID: \`$SCRIPT_ID\`"
+            if [ -f ".clasp.json.bak" ]; then
+              echo "- Note: Existing .clasp.json was temporarily moved to .clasp.json.bak for this run."
+            fi
+            echo ""
+            echo "Download the generated .clasp.json from the workflow artifacts and commit it locally if you want this repo to point at the new project."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload generated clasp config
+        uses: actions/upload-artifact@v4
+        with:
+          name: clasp-config
+          path: .clasp.json
