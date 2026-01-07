@@ -1,7 +1,9 @@
 import { logInfo } from '../lib/logger';
 
 const MENU_NAME = 'Uber 收據';
-const MENU_IMPORT = '匯入 Uber 收據（輸入 Gmail 標籤）';
+const MENU_IMPORT = '匯入/繼續匯入（輸入 Gmail 標籤）';
+const MENU_STATUS = '查看進度（輸入 Gmail 標籤）';
+const MENU_RESET = '重置進度（輸入 Gmail 標籤）';
 
 /**
  * Adds a custom menu to a container-bound Spreadsheet when it is opened.
@@ -14,7 +16,12 @@ export function onOpen(_e: GoogleAppsScript.Events.SheetsOnOpen): void {
   logInfo('onOpen() fired - adding custom menu');
 
   const ui = SpreadsheetApp.getUi();
-  ui.createMenu(MENU_NAME).addItem(MENU_IMPORT, 'uiPromptAndSyncUberReceipts').addToUi();
+  ui
+    .createMenu(MENU_NAME)
+    .addItem(MENU_IMPORT, 'uiPromptAndSyncUberReceipts')
+    .addItem(MENU_STATUS, 'uiPromptAndShowProgress')
+    .addItem(MENU_RESET, 'uiPromptAndResetProgress')
+    .addToUi();
 
   return undefined;
 }

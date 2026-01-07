@@ -1,11 +1,17 @@
 import { onOpen } from '../features/sheetsMenu';
-import { uiPromptAndSyncUberReceipts } from '../features/uberReceipts';
+import {
+  uiPromptAndResetProgress,
+  uiPromptAndShowProgress,
+  uiPromptAndSyncUberReceipts
+} from '../features/uberReceipts';
 import { helloScript } from '../features/helloScript';
 
 type Entrypoints = {
   helloScript: typeof helloScript;
   onOpen: typeof onOpen;
   uiPromptAndSyncUberReceipts: typeof uiPromptAndSyncUberReceipts;
+  uiPromptAndShowProgress: typeof uiPromptAndShowProgress;
+  uiPromptAndResetProgress: typeof uiPromptAndResetProgress;
 };
 
 type GlobalScope = typeof globalThis & {
@@ -27,6 +33,8 @@ export function registerGlobalFunctions(): void {
   namespace.helloScript = helloScript;
   namespace.onOpen = onOpen;
   namespace.uiPromptAndSyncUberReceipts = uiPromptAndSyncUberReceipts;
+  namespace.uiPromptAndShowProgress = uiPromptAndShowProgress;
+  namespace.uiPromptAndResetProgress = uiPromptAndResetProgress;
 
   g.__GAS_TEMPLATE__ = namespace;
   // Add your own exports here, e.g.:
