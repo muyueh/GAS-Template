@@ -13,6 +13,12 @@ const entrypointWrappers = [
   'function helloScript() {',
   '  return globalThis.__GAS_TEMPLATE__.helloScript();',
   '}',
+  'function onOpen(e) {',
+  '  return globalThis.__GAS_TEMPLATE__.onOpen(e);',
+  '}',
+  'function uiPromptAndSyncUberReceipts() {',
+  '  return globalThis.__GAS_TEMPLATE__.uiPromptAndSyncUberReceipts();',
+  '}',
   ''
 ].join('\n');
 

@@ -1,268 +1,718 @@
-import { getOrCreateFolder, getRootFolder } from './drive';
 import { logError, logInfo } from '../lib/logger';
 
-const SHEET_HEADERS = ['車牌', '日期', '時間', '費用', 'PDF 連結網址'] as const;
-const SCRIPT_PROPERTY_KEY = 'uberReceiptMessageIds';
-const DEFAULT_FOLDER_NAME = 'Uber Receipts';
-const DEFAULT_SPREADSHEET_NAME = 'Uber Receipts';
+const UBER_HEADERS = ['搭乘日期', '搭乘時間', '車號', '價格', 'PDF URL'] as const;
+const MAX_RUNTIME_MS = 5.5 * 60 * 1000;
 
-interface UberReceiptRow {
-  licensePlate: string;
-  date: string;
-  time: string;
-  fare: string;
-  pdfUrl: string;
-  messageId: string;
+interface ParsedUberReceipt {
+  rideDate: string;
+  rideTime: string;
+  vehicle: string;
+  fare: number;
+}
+
+interface SyncResult {
+  sheetName: string;
+  folderUrl: string;
+  appended: number;
+  skippedDuplicates: number;
+  skippedParseFailures: number;
+  truncated: boolean;
 }
 
 /**
- * Fetches Uber receipts from Gmail (last 14 days), converts them to PDF in Drive,
- * and appends summary rows into a Spreadsheet.
- *
- * Columns: 車牌、日期、時間、費用、PDF 連結網址
- *
- * Steps:
- * 1. Search Gmail for Uber receipts newer than 14 days.
- * 2. Convert each message body to PDF and store it in Drive.
- * 3. Append a summary row to the target Sheet (avoid duplicates by Gmail message ID).
+ * UI entry point: prompt user for Gmail label name then sync.
  * @returns Nothing.
  */
-export function syncUberReceipts(): void {
-  logInfo('syncUberReceipts()');
+export function uiPromptAndSyncUberReceipts(): void {
+  const ui = SpreadsheetApp.getUi();
+  const resp = ui.prompt(
+    '匯入 Uber 收據',
+    '請輸入 Gmail 標籤名稱（例如 uber202601）',
+    ui.ButtonSet.OK_CANCEL
+  );
 
-  const messages = findRecentUberMessages();
-  if (messages.length === 0) {
-    logInfo('No Uber receipts found within 14 days.');
+  if (resp.getSelectedButton() !== ui.Button.OK) {
     return;
   }
 
-  const driveFolder = ensureTargetFolder();
-  const sheet = ensureTargetSheet(driveFolder);
-  const processedIds = loadProcessedMessageIds();
-
-  const timeZone = Session.getScriptTimeZone();
-  const newRows: UberReceiptRow[] = [];
-
-  messages.forEach((message) => {
-    const messageId = message.getId();
-    if (processedIds.has(messageId)) {
-      return;
-    }
-
-    try {
-      const rawDate = message.getDate();
-      const sentAt = new Date(rawDate.getTime());
-      const date = Utilities.formatDate(sentAt, timeZone, 'yyyy-MM-dd');
-      const time = Utilities.formatDate(sentAt, timeZone, 'HH:mm');
-      const details = parseReceiptDetails(message);
-      const pdfFile = saveMessageAsPdf(message, driveFolder, sentAt);
-
-      newRows.push({
-        licensePlate: details.licensePlate,
-        date,
-        time,
-        fare: details.fare,
-        pdfUrl: pdfFile.getUrl(),
-        messageId
-      });
-
-      processedIds.add(messageId);
-    } catch (error) {
-      logError('Failed to process Uber receipt message.', { messageId, error });
-    }
-  });
-
-  if (newRows.length === 0) {
-    logInfo('No new Uber receipts to record.');
+  const labelName = (resp.getResponseText() || '').trim();
+  if (!labelName) {
+    ui.alert('未輸入標籤名稱，已取消。');
     return;
   }
 
-  appendRows(sheet, newRows);
-  persistProcessedMessageIds(processedIds);
+  try {
+    const result = syncUberReceiptsByLabel_(labelName);
 
-  logInfo('syncUberReceipts() completed', { appended: newRows.length });
+    const extra = result.truncated
+      ? '\n\n⚠️ 本次執行接近 Apps Script 時間上限，可能尚未處理完全部信件。\n請再執行一次同樣的 label（Unique 會避免重複）。'
+      : '';
+
+    ui.alert(
+      '匯入完成',
+      [
+        `Gmail 標籤：${labelName}`,
+        `寫入分頁：${result.sheetName}`,
+        `PDF 資料夾：${result.folderUrl}`,
+        '',
+        `新增：${result.appended}`,
+        `略過（重複）：${result.skippedDuplicates}`,
+        `略過（解析失敗）：${result.skippedParseFailures}`,
+        extra
+      ].join('\n'),
+      ui.ButtonSet.OK
+    );
+  } catch (error) {
+    logError('Failed to sync Uber receipts.', error);
+    ui.alert(
+      '匯入失敗',
+      String(error instanceof Error ? error.message : error),
+      ui.ButtonSet.OK
+    );
+  }
 
   return undefined;
 }
 
 /**
- * Finds Uber receipt messages in the last 14 days.
- * @returns Messages (one per thread, last message).
+ * Main sync function (no UI).
+ * @param labelName Gmail label name (exact).
+ * @returns Sync summary.
  */
-function findRecentUberMessages(): GoogleAppsScript.Gmail.GmailMessage[] {
-  const query = 'newer_than:14d from:(noreply@uber.com)';
-  const threads = GmailApp.search(query);
-  const messages: GoogleAppsScript.Gmail.GmailMessage[] = [];
+function syncUberReceiptsByLabel_(labelName: string): SyncResult {
+  const startedAt = Date.now();
 
-  threads.forEach((thread) => {
-    const threadMessages = thread.getMessages();
-    messages.push(threadMessages[threadMessages.length - 1]);
+  const label = GmailApp.getUserLabelByName(labelName);
+  if (!label) {
+    throw new Error(`找不到 Gmail 標籤：${labelName}`);
+  }
+
+  const folder = ensureDriveFolderForLabel_(labelName);
+  const folderUrl = folder.getUrl();
+
+  const sheet = ensureSheetForLabel_(labelName);
+  const sheetName = sheet.getName();
+  ensureHeaderRow_(sheet);
+
+  const existingKeys = loadExistingUniqueKeys_(sheet);
+  const uniqueKeys = new Set(existingKeys);
+
+  let appended = 0;
+  let skippedDuplicates = 0;
+  let skippedParseFailures = 0;
+  let truncated = false;
+
+  const newRows: (string | number)[][] = [];
+
+  const pageSize = 100;
+  let start = 0;
+
+  while (true) {
+    if (Date.now() - startedAt > MAX_RUNTIME_MS) {
+      truncated = true;
+      break;
+    }
+
+    const threads = label.getThreads(start, pageSize);
+    if (!threads || threads.length === 0) {
+      break;
+    }
+
+    const messages2d = GmailApp.getMessagesForThreads(threads);
+
+    for (let i = 0; i < threads.length; i += 1) {
+      if (Date.now() - startedAt > MAX_RUNTIME_MS) {
+        truncated = true;
+        break;
+      }
+
+      const messages = messages2d[i] || [];
+      for (const message of messages) {
+        if (Date.now() - startedAt > MAX_RUNTIME_MS) {
+          truncated = true;
+          break;
+        }
+
+        const parsed = parseUberReceiptFromMessage_(message);
+        if (!parsed) {
+          skippedParseFailures += 1;
+          continue;
+        }
+
+        const key = buildUniqueKey_(parsed);
+        if (uniqueKeys.has(key)) {
+          skippedDuplicates += 1;
+          continue;
+        }
+
+        const pdfFile = saveReceiptPdf_(message, folder, parsed);
+        const pdfUrl = pdfFile.getUrl();
+
+        newRows.push([parsed.rideDate, parsed.rideTime, parsed.vehicle, parsed.fare, pdfUrl]);
+
+        uniqueKeys.add(key);
+        appended += 1;
+      }
+    }
+
+    start += threads.length;
+  }
+
+  if (newRows.length > 0) {
+    const startRow = sheet.getLastRow() + 1;
+    sheet.getRange(startRow, 1, newRows.length, UBER_HEADERS.length).setValues(newRows);
+
+    try {
+      sheet.autoResizeColumns(1, UBER_HEADERS.length);
+    } catch (error) {
+      logInfo('autoResizeColumns failed (non-blocking).', error);
+    }
+  }
+
+  return {
+    sheetName,
+    folderUrl,
+    appended,
+    skippedDuplicates,
+    skippedParseFailures,
+    truncated
+  };
+}
+
+/**
+ * Create/use Drive folder for label under My Drive root.
+ * @param labelName Gmail label name.
+ * @returns Drive folder for the label.
+ */
+function ensureDriveFolderForLabel_(labelName: string): GoogleAppsScript.Drive.Folder {
+  const parts = String(labelName)
+    .split('/')
+    .map((part) => part.trim())
+    .filter(Boolean);
+
+  let current = DriveApp.getRootFolder();
+  const folders = parts.length > 0 ? parts : [labelName];
+
+  folders.forEach((part) => {
+    const iter = current.getFoldersByName(part);
+    current = iter.hasNext() ? iter.next() : current.createFolder(part);
   });
 
-  return messages;
+  return current;
 }
 
 /**
- * Ensures the Drive folder for storing receipts exists.
- * @returns Target folder.
+ * Create/use sheet tab named as label.
+ * @param labelName Gmail label name.
+ * @returns Sheet for the label.
  */
-function ensureTargetFolder(): GoogleAppsScript.Drive.Folder {
-  const root = getRootFolder();
-  return getOrCreateFolder(root, DEFAULT_FOLDER_NAME);
-}
+function ensureSheetForLabel_(labelName: string): GoogleAppsScript.Spreadsheet.Sheet {
+  const spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
+  const desiredName = sanitizeSheetName_(labelName);
 
-/**
- * Ensures the spreadsheet and header row are ready.
- * @param folder Drive folder to search/create the spreadsheet in.
- * @returns Sheet for appending data.
- */
-function ensureTargetSheet(folder: GoogleAppsScript.Drive.Folder): GoogleAppsScript.Spreadsheet.Sheet {
-  const spreadsheet = findOrCreateSpreadsheet(folder, DEFAULT_SPREADSHEET_NAME);
-  const sheet = spreadsheet.getSheets()[0];
-
-  ensureHeaderRow(sheet);
+  let sheet = spreadsheet.getSheetByName(desiredName);
+  if (!sheet) {
+    sheet = spreadsheet.insertSheet(desiredName);
+  }
 
   return sheet;
 }
 
 /**
- * Finds or creates the spreadsheet used to store receipt metadata.
- * @param folder Drive folder to place the spreadsheet in.
- * @param name Spreadsheet name.
- * @returns The spreadsheet instance.
- */
-function findOrCreateSpreadsheet(
-  folder: GoogleAppsScript.Drive.Folder,
-  name: string
-): GoogleAppsScript.Spreadsheet.Spreadsheet {
-  const files = folder.getFilesByName(name);
-  if (files.hasNext()) {
-    const file = files.next();
-    return SpreadsheetApp.openById(file.getId());
-  }
-
-  const newSpreadsheet = SpreadsheetApp.create(name);
-  const newFile = DriveApp.getFileById(newSpreadsheet.getId());
-  folder.addFile(newFile);
-
-  // Keep Drive tidy: remove the file from root if we can.
-  try {
-    DriveApp.getRootFolder().removeFile(newFile);
-  } catch (error) {
-    logError('Failed to remove spreadsheet from root folder (non-blocking).', error);
-  }
-
-  return newSpreadsheet;
-}
-
-/**
- * Writes the header row if it is missing or incorrect.
- * @param sheet Target sheet.
+ * Ensure header row is correct + set some formatting.
+ * @param sheet Sheet to format.
  * @returns Nothing.
  */
-function ensureHeaderRow(sheet: GoogleAppsScript.Spreadsheet.Sheet): void {
-  const headerRange = sheet.getRange(1, 1, 1, SHEET_HEADERS.length);
-  const current = headerRange.getValues()[0];
+function ensureHeaderRow_(sheet: GoogleAppsScript.Spreadsheet.Sheet): void {
+  const range = sheet.getRange(1, 1, 1, UBER_HEADERS.length);
+  const current = range.getValues()[0];
 
-  const hasHeader =
-    current.filter((value) => String(value).trim().length > 0).length === SHEET_HEADERS.length &&
-    SHEET_HEADERS.every((header, index) => current[index] === header);
+  const matches = UBER_HEADERS.every((header, index) => String(current[index] || '').trim() === header);
 
-  if (!hasHeader) {
-    headerRange.setValues([Array.from(SHEET_HEADERS)]);
+  if (!matches) {
+    range.setValues([Array.from(UBER_HEADERS)]);
   }
+
+  sheet.setFrozenRows(1);
+
+  sheet.getRange('A:A').setNumberFormat('@');
+  sheet.getRange('B:B').setNumberFormat('@');
+  sheet.getRange('C:C').setNumberFormat('@');
+  sheet.getRange('D:D').setNumberFormat('0.00');
+  sheet.getRange('E:E').setNumberFormat('@');
 
   return undefined;
 }
 
 /**
- * Extracts the license plate and fare from a Gmail message body.
- * Falls back to placeholders when data is missing.
- * @param message Gmail message.
- * @returns Receipt details.
+ * Load existing unique keys from sheet rows.
+ * Key = date|time|vehicle|fare(2dp)
+ * @param sheet Sheet to read from.
+ * @returns Unique key set.
  */
-function parseReceiptDetails(message: GoogleAppsScript.Gmail.GmailMessage): {
-  licensePlate: string;
-  fare: string;
-} {
-  const plainBody = message.getPlainBody();
+function loadExistingUniqueKeys_(sheet: GoogleAppsScript.Spreadsheet.Sheet): Set<string> {
+  const lastRow = sheet.getLastRow();
+  if (lastRow < 2) {
+    return new Set();
+  }
 
-  const licensePlate =
-    plainBody.match(/License Plate:\s*([A-Za-z0-9-]+)/i)?.[1].trim() ??
-    plainBody.match(/車牌[:：]\s*([^\n\r]+)/)?.[1].trim() ??
-    plainBody.match(/Rental company:\s*([^\n\r]+)/i)?.[1].trim() ??
-    '未知';
+  const values = sheet.getRange(2, 1, lastRow - 1, UBER_HEADERS.length).getValues();
+  const keys = new Set<string>();
 
-  const fare =
-    plainBody.match(/Total\s+([A-Z]*\$?\s?[\d,.]+(?:\.\d{2})?)/i)?.[1].replace(/\s+/g, '') ?? '未標示';
+  values.forEach((row) => {
+    const date = String(row[0] || '').trim();
+    const time = String(row[1] || '').trim();
+    const vehicle = normalizeVehicle_(String(row[2] || ''));
+    const fareKey = formatFareForKey_(row[3]);
 
-  return { licensePlate, fare };
+    if (!date || !time || !vehicle || !fareKey) {
+      return;
+    }
+
+    keys.add([date, time, vehicle, fareKey].join('|'));
+  });
+
+  return keys;
 }
 
 /**
- * Saves the Gmail message body as a PDF file in Drive.
- * @param message Gmail message to convert.
- * @param folder Destination Drive folder.
- * @param sentAt Message sent time (for filename).
- * @returns Created Drive file.
+ * Parse Uber receipt info from a Gmail message.
+ * @param message Gmail message.
+ * @returns Parsed receipt or null when missing fields.
  */
-function saveMessageAsPdf(
+function parseUberReceiptFromMessage_(
+  message: GoogleAppsScript.Gmail.GmailMessage
+): ParsedUberReceipt | null {
+  const plain = (message.getPlainBody() || '').replace(/\r\n/g, '\n');
+  const html = message.getBody() || '';
+
+  const dt = extractRideDateTime_(plain, html);
+  if (!dt) {
+    return null;
+  }
+
+  const fare = extractTotalFare_(plain, html);
+  if (fare == null || Number.isNaN(fare)) {
+    return null;
+  }
+
+  const vehicleRaw = extractVehicle_(plain);
+  const vehicle = normalizeVehicle_(vehicleRaw || '');
+  if (!vehicle) {
+    return null;
+  }
+
+  return {
+    rideDate: dt.rideDate,
+    rideTime: dt.rideTime,
+    vehicle,
+    fare: Number(fare.toFixed(2))
+  };
+}
+
+/**
+ * Build unique key: date|time|vehicle|fare(2dp)
+ * @param parsed Parsed receipt.
+ * @returns Unique key.
+ */
+function buildUniqueKey_(parsed: ParsedUberReceipt): string {
+  return [
+    String(parsed.rideDate).trim(),
+    String(parsed.rideTime).trim(),
+    normalizeVehicle_(parsed.vehicle),
+    formatFareForKey_(parsed.fare)
+  ].join('|');
+}
+
+/**
+ * Save message HTML as PDF in folder; reuse if same filename exists.
+ * Also sets sharing: anyone with the link can view.
+ * @param message Gmail message.
+ * @param folder Target Drive folder.
+ * @param parsed Parsed receipt.
+ * @returns Drive file.
+ */
+function saveReceiptPdf_(
   message: GoogleAppsScript.Gmail.GmailMessage,
   folder: GoogleAppsScript.Drive.Folder,
-  sentAt: Date
+  parsed: ParsedUberReceipt
 ): GoogleAppsScript.Drive.File {
-  const safeSubject = message.getSubject().replace(/[\\/:*?"<>|]/g, '_');
-  const timeZone = Session.getScriptTimeZone();
-  const timestamp = Utilities.formatDate(sentAt, timeZone, 'yyyyMMdd-HHmm');
-  const fileName = `Uber-Receipt-${timestamp}-${safeSubject}.pdf`;
+  const fileName = makePdfFileName_(parsed);
 
-  const blob = Utilities.newBlob(message.getBody(), 'text/html', fileName).getAs('application/pdf');
+  const existing = folder.getFilesByName(fileName);
+  if (existing.hasNext()) {
+    const file = existing.next();
+    try {
+      file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+    } catch (error) {
+      logInfo('Failed to update sharing (non-blocking).', error);
+    }
+    return file;
+  }
+
+  const html = message.getBody() || '';
+  const blob = Utilities.newBlob(html, MimeType.HTML, fileName).getAs(MimeType.PDF);
+  blob.setName(fileName);
+
   const file = folder.createFile(blob);
-  file.setDescription(`Uber receipt from Gmail message ${message.getId()}`);
+  file.setDescription(`Uber receipt PDF from Gmail message ${message.getId()}`);
+
+  file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
 
   return file;
 }
 
 /**
- * Appends data rows to the sheet.
- * @param sheet Target sheet.
- * @param rows Receipt rows to append.
- * @returns Nothing.
+ * Make a deterministic filename from parsed fields.
+ * @param parsed Parsed receipt.
+ * @returns File name.
  */
-function appendRows(sheet: GoogleAppsScript.Spreadsheet.Sheet, rows: UberReceiptRow[]): void {
-  const values = rows.map((row) => [row.licensePlate, row.date, row.time, row.fare, row.pdfUrl]);
-  sheet.getRange(sheet.getLastRow() + 1, 1, values.length, SHEET_HEADERS.length).setValues(values);
+function makePdfFileName_(parsed: ParsedUberReceipt): string {
+  const date = String(parsed.rideDate).trim();
+  const time = String(parsed.rideTime).trim().replace(':', '-');
+  const vehicle = normalizeVehicle_(parsed.vehicle).replace(/\s+/g, '');
+  const fareKey = formatFareForKey_(parsed.fare);
 
-  return undefined;
+  const base = `Uber_${date}_${time}_${vehicle}_${fareKey}.pdf`;
+  return sanitizeFileName_(base);
 }
 
 /**
- * Loads previously processed Gmail message IDs from script properties.
- * @returns A set of processed IDs.
+ * Extract ride date & time from plain body first, fallback to HTML.
+ * @param plainBody Plain text body.
+ * @param htmlBody Html body.
+ * @returns Ride date/time or null.
  */
-function loadProcessedMessageIds(): Set<string> {
-  const raw = PropertiesService.getScriptProperties().getProperty(SCRIPT_PROPERTY_KEY);
-  if (!raw) {
-    return new Set();
+function extractRideDateTime_(
+  plainBody: string,
+  htmlBody: string
+): { rideDate: string; rideTime: string } | null {
+  const text = (plainBody || '').replace(/\r\n/g, '\n');
+
+  const engDateRe =
+    /\b(Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\s+(\d{1,2}),\s+(\d{4})\b/;
+
+  const zhDateRe = /(\d{4})\s*年\s*(\d{1,2})\s*月\s*(\d{1,2})\s*日/;
+
+  let rideDate: string | null = null;
+  let searchFrom = 0;
+
+  let match = engDateRe.exec(text);
+  if (match) {
+    const monthNum = monthToNumber_(match[1]);
+    if (monthNum == null) {
+      return null;
+    }
+    rideDate = `${match[3]}-${pad2_(monthNum)}-${pad2_(match[2])}`;
+    searchFrom = match.index + match[0].length;
+  } else {
+    match = zhDateRe.exec(text);
+    if (match) {
+      rideDate = `${match[1]}-${pad2_(match[2])}-${pad2_(match[3])}`;
+      searchFrom = match.index + match[0].length;
+    }
   }
 
-  try {
-    const parsed = JSON.parse(raw) as string[];
-    return new Set(parsed);
-  } catch (error) {
-    logError('Failed to parse stored message IDs. Resetting state.', error);
-    return new Set();
+  if (!rideDate) {
+    return extractRideDateTimeFromHtml_(htmlBody || '');
   }
+
+  const tail = text.substring(searchFrom, searchFrom + 300);
+  let timeMatch = /\b(\d{1,2}):(\d{2})\s*(AM|PM)\b/i.exec(tail);
+  if (!timeMatch) {
+    timeMatch = /\b(\d{1,2}):(\d{2})\b/.exec(tail);
+  }
+
+  if (!timeMatch) {
+    const tail2 = text.substring(searchFrom);
+    timeMatch =
+      /\b(\d{1,2}):(\d{2})\s*(AM|PM)\b/i.exec(tail2) || /\b(\d{1,2}):(\d{2})\b/.exec(tail2);
+  }
+
+  if (!timeMatch) {
+    return null;
+  }
+
+  const rideTime = formatTime_(timeMatch[1], timeMatch[2], timeMatch[3]);
+  if (!rideTime) {
+    return null;
+  }
+
+  return { rideDate, rideTime };
 }
 
 /**
- * Persists processed Gmail message IDs to script properties.
- * @param ids IDs to store.
- * @returns Nothing.
+ * Fallback date/time extraction from HTML by looking for divs with class="date".
+ * @param html Html body.
+ * @returns Ride date/time or null.
  */
-function persistProcessedMessageIds(ids: Set<string>): void {
-  const serialized = JSON.stringify(Array.from(ids));
-  PropertiesService.getScriptProperties().setProperty(SCRIPT_PROPERTY_KEY, serialized);
+function extractRideDateTimeFromHtml_(html: string): { rideDate: string; rideTime: string } | null {
+  const re = /class(?:=|=3D)"date"[^>]*>([^<]+)</gi;
 
-  return undefined;
+  const found: string[] = [];
+  let match;
+  while ((match = re.exec(html)) !== null) {
+    const value = String(match[1] || '').trim();
+    if (value) {
+      found.push(value);
+    }
+    if (found.length >= 4) {
+      break;
+    }
+  }
+
+  if (found.length < 2) {
+    return null;
+  }
+
+  const dateStr = found[0];
+  const timeStr = found[1];
+
+  const engDateRe =
+    /\b(Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\s+(\d{1,2}),\s+(\d{4})\b/;
+  const dateMatch = engDateRe.exec(dateStr);
+  if (!dateMatch) {
+    return null;
+  }
+
+  const monthNum = monthToNumber_(dateMatch[1]);
+  if (monthNum == null) {
+    return null;
+  }
+  const rideDate = `${dateMatch[3]}-${pad2_(monthNum)}-${pad2_(dateMatch[2])}`;
+
+  const timeMatch =
+    /\b(\d{1,2}):(\d{2})\s*(AM|PM)\b/i.exec(timeStr) || /\b(\d{1,2}):(\d{2})\b/.exec(timeStr);
+  if (!timeMatch) {
+    return null;
+  }
+
+  const rideTime = formatTime_(timeMatch[1], timeMatch[2], timeMatch[3]);
+  if (!rideTime) {
+    return null;
+  }
+
+  return { rideDate, rideTime };
+}
+
+/**
+ * Extract total fare number.
+ * @param plainBody Plain text body.
+ * @param htmlBody Html body.
+ * @returns Fare amount or null.
+ */
+function extractTotalFare_(plainBody: string, htmlBody: string): number | null {
+  const text = plainBody || '';
+
+  let match = /\bTotal\s+([A-Z]{0,3}\$|NT\$|HK\$|US\$|SG\$)?\s*([\d,]+(?:\.\d{1,2})?)/i.exec(text);
+  if (match) {
+    return parseFloat(String(match[2]).replace(/,/g, ''));
+  }
+
+  match = /data-testid(?:=|=3D)"total_fare_amount"[^>]*>([^<]+)</i.exec(htmlBody || '');
+  if (match) {
+    const inner = String(match[1] || '');
+    const numberMatch = /([\d,]+(?:\.\d{1,2})?)/.exec(inner);
+    if (numberMatch) {
+      return parseFloat(String(numberMatch[1]).replace(/,/g, ''));
+    }
+  }
+
+  match = /Total[^0-9]*([0-9][0-9,]*(?:\.\d{1,2})?)/i.exec(text);
+  if (match) {
+    return parseFloat(String(match[1]).replace(/,/g, ''));
+  }
+
+  return null;
+}
+
+/**
+ * Extract vehicle id (車號).
+ * @param plainBody Plain text body.
+ * @returns Vehicle string.
+ */
+function extractVehicle_(plainBody: string): string {
+  const text = (plainBody || '').replace(/\r\n/g, '\n');
+
+  let match = /License Plate:\s*([A-Za-z0-9-]+)/i.exec(text);
+  if (match) {
+    return match[1].trim();
+  }
+
+  match = /車牌[:：]\s*([^\n\r]+)/.exec(text);
+  if (match) {
+    return String(match[1] || '').trim();
+  }
+
+  match = /Rental company:\s*([^\n\r]+)/i.exec(text);
+  if (match) {
+    let line = String(match[1] || '').trim();
+    line = line.split(',')[0].trim();
+    line = normalizeFullWidth_(line).replace(/臺/g, '台');
+
+    const cityRe =
+      /(台北|新北|桃園|基隆|台中|高雄|台南|新竹|嘉義|彰化|南投|宜蘭|花蓮|台東)-[A-Za-z0-9-]+/;
+    const cityMatch = cityRe.exec(line);
+    if (cityMatch) {
+      return cityMatch[0];
+    }
+
+    const tokens = line.split(/\s+/).filter(Boolean);
+    if (tokens.length > 0) {
+      return tokens[tokens.length - 1];
+    }
+
+    return line;
+  }
+
+  return '';
+}
+
+/**
+ * Pads a value to 2 digits.
+ * @param value Value to pad.
+ * @returns Padded string.
+ */
+function pad2_(value: string | number): string {
+  return String(value).padStart(2, '0');
+}
+
+/**
+ * Converts a month name to month number.
+ * @param monthName Month name string.
+ * @returns Month number or null.
+ */
+function monthToNumber_(monthName: string): number | null {
+  const key = String(monthName || '').slice(0, 3).toLowerCase();
+  const map: Record<string, number> = {
+    jan: 1,
+    feb: 2,
+    mar: 3,
+    apr: 4,
+    may: 5,
+    jun: 6,
+    jul: 7,
+    aug: 8,
+    sep: 9,
+    oct: 10,
+    nov: 11,
+    dec: 12
+  };
+  return map[key] ?? null;
+}
+
+/**
+ * Convert (h, m, AM/PM) to "HH:mm".
+ * @param hStr Hour string.
+ * @param mStr Minute string.
+ * @param ampm Optional AM/PM.
+ * @returns Time string.
+ */
+function formatTime_(hStr: string, mStr: string, ampm?: string): string {
+  let hours = parseInt(hStr, 10);
+  const minutes = parseInt(mStr, 10);
+
+  if (!Number.isNaN(hours) && ampm) {
+    const upper = String(ampm).toUpperCase();
+    if (upper === 'PM' && hours < 12) {
+      hours += 12;
+    }
+    if (upper === 'AM' && hours === 12) {
+      hours = 0;
+    }
+  }
+
+  if (Number.isNaN(hours) || Number.isNaN(minutes)) {
+    return '';
+  }
+
+  return `${pad2_(hours)}:${pad2_(minutes)}`;
+}
+
+/**
+ * Normalize fullwidth digits/letters and hyphens to halfwidth/ascii.
+ * @param input Input string.
+ * @returns Normalized string.
+ */
+function normalizeFullWidth_(input: string): string {
+  let value = String(input || '');
+
+  value = value.replace(/[０-９]/g, (ch) => String.fromCharCode(ch.charCodeAt(0) - 0xfee0));
+  value = value.replace(/[Ａ-Ｚ]/g, (ch) => String.fromCharCode(ch.charCodeAt(0) - 0xfee0));
+  value = value.replace(/[ａ-ｚ]/g, (ch) => String.fromCharCode(ch.charCodeAt(0) - 0xfee0));
+  value = value.replace(/[－–—]/g, '-');
+  value = value.replace(/\s+/g, ' ').trim();
+
+  return value;
+}
+
+/**
+ * Vehicle normalization for keys and filenames.
+ * @param vehicle Vehicle string.
+ * @returns Normalized vehicle.
+ */
+function normalizeVehicle_(vehicle: string): string {
+  let value = normalizeFullWidth_(vehicle || '');
+  value = value.replace(/臺/g, '台');
+  value = value.replace(/[，,]$/, '');
+  value = value.trim();
+  return value;
+}
+
+/**
+ * Fare normalization for unique key.
+ * @param fareValue Fare value.
+ * @returns Normalized fare string.
+ */
+function formatFareForKey_(fareValue: number | string): string {
+  let numberValue: number;
+
+  if (typeof fareValue === 'number') {
+    numberValue = fareValue;
+  } else {
+    const match = /([\d,]+(?:\.\d{1,2})?)/.exec(String(fareValue || ''));
+    if (!match) {
+      return '';
+    }
+    numberValue = parseFloat(String(match[1]).replace(/,/g, ''));
+  }
+
+  if (Number.isNaN(numberValue)) {
+    return '';
+  }
+
+  return Number(numberValue).toFixed(2);
+}
+
+/**
+ * Sanitize filename for Drive compatibility.
+ * @param name File name.
+ * @returns Sanitized file name.
+ */
+function sanitizeFileName_(name: string): string {
+  return String(name || '')
+    .replace(/[\\/:*?"<>|]/g, '_')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 180);
+}
+
+/**
+ * Sanitize sheet name (Google Sheets has restrictions).
+ * @param name Sheet name.
+ * @returns Sanitized sheet name.
+ */
+function sanitizeSheetName_(name: string): string {
+  let value = String(name || '').trim();
+  value = value.replace(/[\\/?*[\]:]/g, '_');
+
+  if (value.length > 100) {
+    value = value.slice(0, 100);
+  }
+
+  if (!value) {
+    value = 'UberReceipts';
+  }
+
+  return value;
 }
