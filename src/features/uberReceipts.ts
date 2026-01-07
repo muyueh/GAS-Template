@@ -815,7 +815,7 @@ function isFinalUberReceiptMessage_(message: GoogleAppsScript.Gmail.GmailMessage
   const plain = message.getPlainBody() || '';
   const html = message.getBody() || '';
   const htmlText = stripHtmlToText_(html);
-  const combined = `${plain}\n${htmlText}`.toLowerCase();
+  const combined = `${plain}\n${htmlText}`.toLowerCase().replace(/\s+/g, ' ').trim();
 
   const receiptIndicators = [
     'download the receipt in a pdf format',
