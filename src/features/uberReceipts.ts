@@ -208,14 +208,19 @@ function syncUberReceiptsByLabel_(labelName: string): SyncResult {
 
     const messages2d = GmailApp.getMessagesForThreads(threads);
 
+    let timeNearlyUp = false;
     for (let i = 0; i < threads.length; i += 1) {
       if (isTimeNearlyUp_(startedAt)) {
+        timeNearlyUp = true;
         break;
       }
 
+      let threadCompleted = true;
       const messages = messages2d[i] || [];
       for (const message of messages) {
         if (isTimeNearlyUp_(startedAt)) {
+          threadCompleted = false;
+          timeNearlyUp = true;
           break;
         }
 
@@ -248,12 +253,31 @@ function syncUberReceiptsByLabel_(labelName: string): SyncResult {
         }
       }
 
+      if (!threadCompleted) {
+        break;
+      }
+
       offset += 1;
 
       if (offset % SAVE_PROGRESS_EVERY_THREADS === 0) {
         flushPendingRows_(sheet, pendingRows);
         saveProgress_(labelName, { offset, completed: false });
       }
+    }
+
+    if (timeNearlyUp) {
+      flushPendingRows_(sheet, pendingRows);
+      saveProgress_(labelName, { offset, completed: false });
+      const updated = getProgress_(labelName);
+      return {
+        sheetName,
+        folderUrl,
+        appended,
+        skippedDuplicates,
+        skippedParseFailures,
+        completed: false,
+        progress: updated
+      };
     }
   }
 }
