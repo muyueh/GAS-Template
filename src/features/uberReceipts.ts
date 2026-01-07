@@ -262,7 +262,6 @@ function syncUberReceiptsByLabel_(labelName: string): SyncResult {
  * Flush pending rows to the sheet.
  * @param sheet Target sheet.
  * @param pendingRows Rows to append.
- * @returns Nothing.
  */
 function flushPendingRows_(
   sheet: GoogleAppsScript.Spreadsheet.Sheet,
@@ -325,7 +324,6 @@ function getProgress_(labelName: string): ProgressState {
  * Save sync progress to DocumentProperties.
  * @param labelName Gmail label.
  * @param state Progress state.
- * @returns Nothing.
  */
 function saveProgress_(labelName: string, state: Pick<ProgressState, 'offset' | 'completed'>): void {
   const props = PropertiesService.getDocumentProperties();
@@ -341,7 +339,6 @@ function saveProgress_(labelName: string, state: Pick<ProgressState, 'offset' | 
 /**
  * Clear stored progress for a label.
  * @param labelName Gmail label.
- * @returns Nothing.
  */
 function clearProgress_(labelName: string): void {
   const props = PropertiesService.getDocumentProperties();
@@ -362,7 +359,6 @@ function isTimeNearlyUp_(startedAt: number): boolean {
  * Prompt for Gmail label.
  * @param ui Spreadsheet UI.
  * @param title Prompt title.
- * @returns Label name or null.
  */
 function promptLabelName_(ui: GoogleAppsScript.Base.Ui, title: string): string | null {
   const resp = ui.prompt(title, '請輸入 Gmail 標籤名稱（例如 uber202601）', ui.ButtonSet.OK_CANCEL);
@@ -729,6 +725,7 @@ function extractTotalFare_(plainBody: string, htmlBody: string): number | null {
 /**
  * Extract vehicle id (車號).
  * @param plainBody Plain text body.
+ * @param htmlBody Html body.
  * @returns Vehicle string.
  */
 function extractVehicle_(plainBody: string, htmlBody: string): string {
