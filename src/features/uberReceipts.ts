@@ -790,7 +790,8 @@ function extractVehicleFromText_(text: string): string {
 function isFinalUberReceiptMessage_(message: GoogleAppsScript.Gmail.GmailMessage): boolean {
   const plain = message.getPlainBody() || '';
   const html = message.getBody() || '';
-  const combined = `${plain}\n${html}`.toLowerCase();
+  const htmlText = stripHtmlToText_(html);
+  const combined = `${plain}\n${htmlText}`.toLowerCase();
 
   const receiptIndicators = [
     'download the receipt in a pdf format',
@@ -798,14 +799,18 @@ function isFinalUberReceiptMessage_(message: GoogleAppsScript.Gmail.GmailMessage
     'download trip receipt'
   ];
 
-  const hasReceiptDownload = receiptIndicators.some((text) => combined.includes(text));
-  if (!hasReceiptDownload) {
+  const chargeSummaryIndicators = ['this is your charge summary', 'this is not a payment receipt'];
+  const isChargeSummary = chargeSummaryIndicators.some((text) => combined.includes(text));
+  if (isChargeSummary) {
     return false;
   }
 
-  const chargeSummaryIndicators = ['this is your charge summary', 'this is not a payment receipt'];
-  const isChargeSummary = chargeSummaryIndicators.some((text) => combined.includes(text));
-  return !isChargeSummary;
+  const hasReceiptDownload = receiptIndicators.some((text) => combined.includes(text));
+  if (hasReceiptDownload) {
+    return true;
+  }
+
+  return true;
 }
 
 /**
