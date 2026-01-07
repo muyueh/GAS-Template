@@ -219,6 +219,10 @@ function syncUberReceiptsByLabel_(labelName: string): SyncResult {
           break;
         }
 
+        if (!isFinalUberReceiptMessage_(message)) {
+          continue;
+        }
+
         const parsed = parseUberReceiptFromMessage_(message);
         if (!parsed) {
           skippedParseFailures += 1;
@@ -492,7 +496,7 @@ function parseUberReceiptFromMessage_(
     return null;
   }
 
-  const vehicleRaw = extractVehicle_(plain);
+  const vehicleRaw = extractVehicle_(plain, html);
   const vehicle = normalizeVehicle_(vehicleRaw || '');
   if (!vehicle) {
     return null;
@@ -727,20 +731,36 @@ function extractTotalFare_(plainBody: string, htmlBody: string): number | null {
  * @param plainBody Plain text body.
  * @returns Vehicle string.
  */
-function extractVehicle_(plainBody: string): string {
-  const text = (plainBody || '').replace(/\r\n/g, '\n');
+function extractVehicle_(plainBody: string, htmlBody: string): string {
+  const plainText = (plainBody || '').replace(/\r\n/g, '\n');
+  const htmlText = stripHtmlToText_(htmlBody);
 
-  let match = /License Plate:\s*([A-Za-z0-9-]+)/i.exec(text);
+  return (
+    extractVehicleFromText_(plainText) ||
+    extractVehicleFromText_(htmlText) ||
+    ''
+  );
+}
+
+/**
+ * Extract vehicle id (車號) from a text blob.
+ * @param text Plain text.
+ * @returns Vehicle string.
+ */
+function extractVehicleFromText_(text: string): string {
+  const normalized = (text || '').replace(/\r\n/g, '\n');
+
+  let match = /License Plate:\s*([A-Za-z0-9-]+)/i.exec(normalized);
   if (match) {
     return match[1].trim();
   }
 
-  match = /車牌[:：]\s*([^\n\r]+)/.exec(text);
+  match = /車牌[:：]\s*([^\n\r]+)/.exec(normalized);
   if (match) {
     return String(match[1] || '').trim();
   }
 
-  match = /Rental company:\s*([^\n\r]+)/i.exec(text);
+  match = /Rental company:\s*([^\n\r]+)/i.exec(normalized);
   if (match) {
     let line = String(match[1] || '').trim();
     line = line.split(',')[0].trim();
@@ -762,6 +782,51 @@ function extractVehicle_(plainBody: string): string {
   }
 
   return '';
+}
+
+/**
+ * Check whether the message is a paid Uber receipt email.
+ * @param message Gmail message.
+ * @returns True if it looks like a final receipt email.
+ */
+function isFinalUberReceiptMessage_(message: GoogleAppsScript.Gmail.GmailMessage): boolean {
+  const plain = message.getPlainBody() || '';
+  const html = message.getBody() || '';
+  const combined = `${plain}\n${html}`.toLowerCase();
+
+  const receiptIndicators = [
+    'download the receipt in a pdf format',
+    'download trip receipt pdf',
+    'download trip receipt'
+  ];
+
+  const hasReceiptDownload = receiptIndicators.some((text) => combined.includes(text));
+  if (!hasReceiptDownload) {
+    return false;
+  }
+
+  const chargeSummaryIndicators = ['this is your charge summary', 'this is not a payment receipt'];
+  const isChargeSummary = chargeSummaryIndicators.some((text) => combined.includes(text));
+  return !isChargeSummary;
+}
+
+/**
+ * Strip HTML to plain-ish text.
+ * @param html Html content.
+ * @returns Text content.
+ */
+function stripHtmlToText_(html: string): string {
+  if (!html) {
+    return '';
+  }
+
+  return html
+    .replace(/<script[\s\S]*?<\/script>/gi, ' ')
+    .replace(/<style[\s\S]*?<\/style>/gi, ' ')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/&nbsp;/gi, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
 }
 
 /**
