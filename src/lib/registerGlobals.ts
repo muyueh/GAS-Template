@@ -1,22 +1,7 @@
-import { doGet } from '../features/webapp';
-import { onOpen } from '../features/sheetsMenu';
-import { helloWorld } from '../features/helloWorld';
-import { createQuestionTypeShowcase, createTenQuestionForm } from '../features/formBuilder';
-import { createSlidesFeatureShowcase } from '../features/slidesShowcase';
-import { createSheetsComponentShowcase } from '../features/sheetsComponentsShowcase';
-import { syncUberReceipts } from '../features/uberReceipts';
-import { createDocsComponentShowcase } from '../features/docsShowcase';
+import { helloScript } from '../features/helloScript';
 
 type Entrypoints = {
-  helloWorld: typeof helloWorld;
-  createQuestionTypeShowcase: typeof createQuestionTypeShowcase;
-  createTenQuestionForm: typeof createTenQuestionForm;
-  createSlidesFeatureShowcase: typeof createSlidesFeatureShowcase;
-  createDocsComponentShowcase: typeof createDocsComponentShowcase;
-  createSheetsComponentShowcase: typeof createSheetsComponentShowcase;
-  syncUberReceipts: typeof syncUberReceipts;
-  onOpen: typeof onOpen;
-  doGet: typeof doGet;
+  helloScript: typeof helloScript;
 };
 
 type GlobalScope = typeof globalThis & {
@@ -35,18 +20,7 @@ export function registerGlobalFunctions(): void {
   const g = globalThis as GlobalScope;
   const namespace = g.__GAS_TEMPLATE__ ?? {};
 
-  // ---- Always-on demo entrypoints (safe to keep) ----
-  namespace.helloWorld = helloWorld;
-  namespace.createQuestionTypeShowcase = createQuestionTypeShowcase;
-  namespace.createTenQuestionForm = createTenQuestionForm;
-  namespace.createSlidesFeatureShowcase = createSlidesFeatureShowcase;
-  namespace.createDocsComponentShowcase = createDocsComponentShowcase;
-  namespace.createSheetsComponentShowcase = createSheetsComponentShowcase;
-  namespace.syncUberReceipts = syncUberReceipts;
-
-  // ---- Optional entrypoints (comment out if you don't need them) ----
-  namespace.onOpen = onOpen;
-  namespace.doGet = doGet;
+  namespace.helloScript = helloScript;
 
   g.__GAS_TEMPLATE__ = namespace;
   // Add your own exports here, e.g.:
