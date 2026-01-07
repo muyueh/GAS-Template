@@ -19,6 +19,12 @@ const entrypointWrappers = [
   'function uiPromptAndSyncUberReceipts() {',
   '  return globalThis.__GAS_TEMPLATE__.uiPromptAndSyncUberReceipts();',
   '}',
+  'function uiPromptAndShowProgress() {',
+  '  return globalThis.__GAS_TEMPLATE__.uiPromptAndShowProgress();',
+  '}',
+  'function uiPromptAndResetProgress() {',
+  '  return globalThis.__GAS_TEMPLATE__.uiPromptAndResetProgress();',
+  '}',
   ''
 ].join('\n');
 

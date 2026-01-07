@@ -1,7 +1,10 @@
 import { logError, logInfo } from '../lib/logger';
 
 const UBER_HEADERS = ['搭乘日期', '搭乘時間', '車號', '價格', 'PDF URL'] as const;
-const MAX_RUNTIME_MS = 5.5 * 60 * 1000;
+const MAX_RUNTIME_MS = 5.4 * 60 * 1000;
+const THREAD_PAGE_SIZE = 50;
+const WRITE_BATCH_ROWS = 20;
+const SAVE_PROGRESS_EVERY_THREADS = 10;
 
 interface ParsedUberReceipt {
   rideDate: string;
@@ -16,7 +19,14 @@ interface SyncResult {
   appended: number;
   skippedDuplicates: number;
   skippedParseFailures: number;
-  truncated: boolean;
+  completed: boolean;
+  progress: ProgressState;
+}
+
+interface ProgressState {
+  offset: number;
+  completed: boolean;
+  updatedAt: number;
 }
 
 /**
@@ -25,41 +35,43 @@ interface SyncResult {
  */
 export function uiPromptAndSyncUberReceipts(): void {
   const ui = SpreadsheetApp.getUi();
-  const resp = ui.prompt(
-    '匯入 Uber 收據',
-    '請輸入 Gmail 標籤名稱（例如 uber202601）',
-    ui.ButtonSet.OK_CANCEL
-  );
-
-  if (resp.getSelectedButton() !== ui.Button.OK) {
+  const labelName = promptLabelName_(ui, '匯入/繼續匯入 Uber 收據');
+  if (!labelName) {
     return;
   }
 
-  const labelName = (resp.getResponseText() || '').trim();
-  if (!labelName) {
-    ui.alert('未輸入標籤名稱，已取消。');
+  const lock = LockService.getDocumentLock();
+  if (!lock.tryLock(30 * 1000)) {
+    ui.alert('目前已有一個匯入作業在執行中，請稍後再試。');
     return;
   }
 
   try {
     const result = syncUberReceiptsByLabel_(labelName);
+    const progress = result.progress;
 
-    const extra = result.truncated
-      ? '\n\n⚠️ 本次執行接近 Apps Script 時間上限，可能尚未處理完全部信件。\n請再執行一次同樣的 label（Unique 會避免重複）。'
-      : '';
+    const lines = [
+      `Gmail 標籤：${labelName}`,
+      `寫入分頁：${result.sheetName}`,
+      `PDF 資料夾：${result.folderUrl}`,
+      '',
+      `新增：${result.appended}`,
+      `略過（重複）：${result.skippedDuplicates}`,
+      `略過（解析失敗）：${result.skippedParseFailures}`,
+      ''
+    ];
+
+    if (result.completed) {
+      lines.push('✅ 已完成：此 label 全部 threads 已掃描完畢。');
+      lines.push('（下次再執行同 label，會從頭掃；Unique 會避免重複。）');
+    } else {
+      lines.push('⏳ 尚未完成：本次接近時間上限，已保存進度。');
+      lines.push(`下次會從 thread offset = ${progress.offset} 繼續。`);
+    }
 
     ui.alert(
-      '匯入完成',
-      [
-        `Gmail 標籤：${labelName}`,
-        `寫入分頁：${result.sheetName}`,
-        `PDF 資料夾：${result.folderUrl}`,
-        '',
-        `新增：${result.appended}`,
-        `略過（重複）：${result.skippedDuplicates}`,
-        `略過（解析失敗）：${result.skippedParseFailures}`,
-        extra
-      ].join('\n'),
+      '匯入結果',
+      lines.join('\n'),
       ui.ButtonSet.OK
     );
   } catch (error) {
@@ -69,6 +81,62 @@ export function uiPromptAndSyncUberReceipts(): void {
       String(error instanceof Error ? error.message : error),
       ui.ButtonSet.OK
     );
+  } finally {
+    lock.releaseLock();
+  }
+
+  return undefined;
+}
+
+/**
+ * UI entry point: prompt user for Gmail label name then show progress.
+ * @returns Nothing.
+ */
+export function uiPromptAndShowProgress(): void {
+  const ui = SpreadsheetApp.getUi();
+  const labelName = promptLabelName_(ui, '查看 Uber 匯入進度');
+  if (!labelName) {
+    return;
+  }
+
+  const progress = getProgress_(labelName);
+
+  ui.alert(
+    '目前進度',
+    [
+      `Gmail 標籤：${labelName}`,
+      `完成狀態：${progress.completed ? '已完成' : '未完成'}`,
+      `目前 offset：${progress.offset}`,
+      `最後更新：${progress.updatedAt ? new Date(progress.updatedAt).toLocaleString() : '(無)'}`
+    ].join('\n'),
+    ui.ButtonSet.OK
+  );
+
+  return undefined;
+}
+
+/**
+ * UI entry point: prompt user for Gmail label name then reset progress.
+ * @returns Nothing.
+ */
+export function uiPromptAndResetProgress(): void {
+  const ui = SpreadsheetApp.getUi();
+  const labelName = promptLabelName_(ui, '重置 Uber 匯入進度');
+  if (!labelName) {
+    return;
+  }
+
+  const lock = LockService.getDocumentLock();
+  if (!lock.tryLock(30 * 1000)) {
+    ui.alert('目前已有一個匯入作業在執行中，請稍後再試。');
+    return;
+  }
+
+  try {
+    clearProgress_(labelName);
+    ui.alert(`已重置進度：${labelName}\n下次匯入會從頭開始掃描。`);
+  } finally {
+    lock.releaseLock();
   }
 
   return undefined;
@@ -100,36 +168,54 @@ function syncUberReceiptsByLabel_(labelName: string): SyncResult {
   let appended = 0;
   let skippedDuplicates = 0;
   let skippedParseFailures = 0;
-  let truncated = false;
 
-  const newRows: (string | number)[][] = [];
+  const pendingRows: (string | number)[][] = [];
 
-  const pageSize = 100;
-  let start = 0;
+  const progress = getProgress_(labelName);
+  let offset = progress.completed ? 0 : Number(progress.offset || 0);
 
   while (true) {
-    if (Date.now() - startedAt > MAX_RUNTIME_MS) {
-      truncated = true;
-      break;
+    if (isTimeNearlyUp_(startedAt)) {
+      flushPendingRows_(sheet, pendingRows);
+      saveProgress_(labelName, { offset, completed: false });
+      const updated = getProgress_(labelName);
+      return {
+        sheetName,
+        folderUrl,
+        appended,
+        skippedDuplicates,
+        skippedParseFailures,
+        completed: false,
+        progress: updated
+      };
     }
 
-    const threads = label.getThreads(start, pageSize);
+    const threads = label.getThreads(offset, THREAD_PAGE_SIZE);
     if (!threads || threads.length === 0) {
-      break;
+      flushPendingRows_(sheet, pendingRows);
+      saveProgress_(labelName, { offset: 0, completed: true });
+      const updated = getProgress_(labelName);
+      return {
+        sheetName,
+        folderUrl,
+        appended,
+        skippedDuplicates,
+        skippedParseFailures,
+        completed: true,
+        progress: updated
+      };
     }
 
     const messages2d = GmailApp.getMessagesForThreads(threads);
 
     for (let i = 0; i < threads.length; i += 1) {
-      if (Date.now() - startedAt > MAX_RUNTIME_MS) {
-        truncated = true;
+      if (isTimeNearlyUp_(startedAt)) {
         break;
       }
 
       const messages = messages2d[i] || [];
       for (const message of messages) {
-        if (Date.now() - startedAt > MAX_RUNTIME_MS) {
-          truncated = true;
+        if (isTimeNearlyUp_(startedAt)) {
           break;
         }
 
@@ -148,35 +234,145 @@ function syncUberReceiptsByLabel_(labelName: string): SyncResult {
         const pdfFile = saveReceiptPdf_(message, folder, parsed);
         const pdfUrl = pdfFile.getUrl();
 
-        newRows.push([parsed.rideDate, parsed.rideTime, parsed.vehicle, parsed.fare, pdfUrl]);
+        pendingRows.push([parsed.rideDate, parsed.rideTime, parsed.vehicle, parsed.fare, pdfUrl]);
 
         uniqueKeys.add(key);
         appended += 1;
+
+        if (pendingRows.length >= WRITE_BATCH_ROWS) {
+          flushPendingRows_(sheet, pendingRows);
+        }
+      }
+
+      offset += 1;
+
+      if (offset % SAVE_PROGRESS_EVERY_THREADS === 0) {
+        flushPendingRows_(sheet, pendingRows);
+        saveProgress_(labelName, { offset, completed: false });
       }
     }
+  }
+}
 
-    start += threads.length;
+/**
+ * Flush pending rows to the sheet.
+ * @param sheet Target sheet.
+ * @param pendingRows Rows to append.
+ * @returns Nothing.
+ */
+function flushPendingRows_(
+  sheet: GoogleAppsScript.Spreadsheet.Sheet,
+  pendingRows: (string | number)[][]
+): void {
+  if (!pendingRows.length) {
+    return;
   }
 
-  if (newRows.length > 0) {
-    const startRow = sheet.getLastRow() + 1;
-    sheet.getRange(startRow, 1, newRows.length, UBER_HEADERS.length).setValues(newRows);
+  const startRow = sheet.getLastRow() + 1;
+  sheet.getRange(startRow, 1, pendingRows.length, UBER_HEADERS.length).setValues(pendingRows);
+  pendingRows.length = 0;
 
-    try {
-      sheet.autoResizeColumns(1, UBER_HEADERS.length);
-    } catch (error) {
-      logInfo('autoResizeColumns failed (non-blocking).', error);
-    }
+  try {
+    sheet.autoResizeColumns(1, UBER_HEADERS.length);
+  } catch (error) {
+    logInfo('autoResizeColumns failed (non-blocking).', error);
   }
 
-  return {
-    sheetName,
-    folderUrl,
-    appended,
-    skippedDuplicates,
-    skippedParseFailures,
-    truncated
+  SpreadsheetApp.flush();
+}
+
+/**
+ * Build a progress property key for a label.
+ * @param labelName Gmail label.
+ * @returns Property key.
+ */
+function progressPropKey_(labelName: string): string {
+  const token = Utilities.base64EncodeWebSafe(String(labelName || ''));
+  return `UBER_PROGRESS_${token}`;
+}
+
+/**
+ * Get sync progress from DocumentProperties.
+ * @param labelName Gmail label.
+ * @returns Progress state.
+ */
+function getProgress_(labelName: string): ProgressState {
+  const props = PropertiesService.getDocumentProperties();
+  const key = progressPropKey_(labelName);
+  const raw = props.getProperty(key);
+  if (!raw) {
+    return { offset: 0, completed: false, updatedAt: 0 };
+  }
+
+  try {
+    const obj = JSON.parse(raw);
+    return {
+      offset: Number(obj.offset || 0),
+      completed: Boolean(obj.completed),
+      updatedAt: Number(obj.updatedAt || 0)
+    };
+  } catch (error) {
+    logInfo('Failed to parse progress (resetting).', error);
+    return { offset: 0, completed: false, updatedAt: 0 };
+  }
+}
+
+/**
+ * Save sync progress to DocumentProperties.
+ * @param labelName Gmail label.
+ * @param state Progress state.
+ * @returns Nothing.
+ */
+function saveProgress_(labelName: string, state: Pick<ProgressState, 'offset' | 'completed'>): void {
+  const props = PropertiesService.getDocumentProperties();
+  const key = progressPropKey_(labelName);
+  const payload: ProgressState = {
+    offset: Number(state.offset || 0),
+    completed: Boolean(state.completed),
+    updatedAt: Date.now()
   };
+  props.setProperty(key, JSON.stringify(payload));
+}
+
+/**
+ * Clear stored progress for a label.
+ * @param labelName Gmail label.
+ * @returns Nothing.
+ */
+function clearProgress_(labelName: string): void {
+  const props = PropertiesService.getDocumentProperties();
+  const key = progressPropKey_(labelName);
+  props.deleteProperty(key);
+}
+
+/**
+ * Runtime guard.
+ * @param startedAt Start timestamp.
+ * @returns True if near time limit.
+ */
+function isTimeNearlyUp_(startedAt: number): boolean {
+  return Date.now() - startedAt > MAX_RUNTIME_MS;
+}
+
+/**
+ * Prompt for Gmail label.
+ * @param ui Spreadsheet UI.
+ * @param title Prompt title.
+ * @returns Label name or null.
+ */
+function promptLabelName_(ui: GoogleAppsScript.Base.Ui, title: string): string | null {
+  const resp = ui.prompt(title, '請輸入 Gmail 標籤名稱（例如 uber202601）', ui.ButtonSet.OK_CANCEL);
+  if (resp.getSelectedButton() !== ui.Button.OK) {
+    return null;
+  }
+
+  const labelName = (resp.getResponseText() || '').trim();
+  if (!labelName) {
+    ui.alert('未輸入標籤名稱，已取消。');
+    return null;
+  }
+
+  return labelName;
 }
 
 /**
