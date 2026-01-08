@@ -458,6 +458,7 @@ function isTimeNearlyUp_(startedAt: number): boolean {
  * Prompt for Gmail label.
  * @param ui Spreadsheet UI.
  * @param title Prompt title.
+ * @returns Label name or null.
  */
 function promptLabelName_(ui: GoogleAppsScript.Base.Ui, title: string): string | null {
   const resp = ui.prompt(title, '請輸入 Gmail 標籤名稱（例如 uber202601）', ui.ButtonSet.OK_CANCEL);
