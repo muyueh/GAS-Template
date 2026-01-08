@@ -1,6 +1,7 @@
 import { logError, logInfo } from '../lib/logger';
 
 const UBER_HEADERS = ['搭乘日期', '搭乘時間', '車號', '價格', 'PDF URL'] as const;
+const UBER_ERROR_HEADERS = ['郵件日期', '郵件主旨', '原因', '郵件 ID', '片段'] as const;
 const MAX_RUNTIME_MS = 5.4 * 60 * 1000;
 const THREAD_PAGE_SIZE = 50;
 const WRITE_BATCH_ROWS = 20;
@@ -13,11 +14,18 @@ interface ParsedUberReceipt {
   fare: number;
 }
 
+type ParseOutcome =
+  | { status: 'ok'; parsed: ParsedUberReceipt }
+  | { status: 'error'; reason: string };
+
 interface SyncResult {
   sheetName: string;
+  errorSheetName: string;
   folderUrl: string;
   appended: number;
+  appendedErrors: number;
   skippedDuplicates: number;
+  skippedCanceled: number;
   skippedParseFailures: number;
   completed: boolean;
   progress: ProgressState;
@@ -53,10 +61,13 @@ export function uiPromptAndSyncUberReceipts(): void {
     const lines = [
       `Gmail 標籤：${labelName}`,
       `寫入分頁：${result.sheetName}`,
+      `錯誤分頁：${result.errorSheetName}`,
       `PDF 資料夾：${result.folderUrl}`,
       '',
       `新增：${result.appended}`,
+      `寫入（錯誤）：${result.appendedErrors}`,
       `略過（重複）：${result.skippedDuplicates}`,
+      `略過（取消）：${result.skippedCanceled}`,
       `略過（解析失敗）：${result.skippedParseFailures}`,
       ''
     ];
@@ -162,14 +173,24 @@ function syncUberReceiptsByLabel_(labelName: string): SyncResult {
   const sheetName = sheet.getName();
   ensureHeaderRow_(sheet);
 
+  const errorSheet = ensureErrorSheetForLabel_(labelName);
+  const errorSheetName = errorSheet.getName();
+  ensureErrorHeaderRow_(errorSheet);
+
   const existingKeys = loadExistingUniqueKeys_(sheet);
   const uniqueKeys = new Set(existingKeys);
 
+  const existingErrorIds = loadExistingErrorIds_(errorSheet);
+  const errorIds = new Set(existingErrorIds);
+
   let appended = 0;
+  let appendedErrors = 0;
   let skippedDuplicates = 0;
+  let skippedCanceled = 0;
   let skippedParseFailures = 0;
 
   const pendingRows: (string | number)[][] = [];
+  const pendingErrorRows: (string | number)[][] = [];
 
   const progress = getProgress_(labelName);
   let offset = progress.completed ? 0 : Number(progress.offset || 0);
@@ -177,13 +198,17 @@ function syncUberReceiptsByLabel_(labelName: string): SyncResult {
   while (true) {
     if (isTimeNearlyUp_(startedAt)) {
       flushPendingRows_(sheet, pendingRows);
+      flushPendingErrorRows_(errorSheet, pendingErrorRows);
       saveProgress_(labelName, { offset, completed: false });
       const updated = getProgress_(labelName);
       return {
         sheetName,
+        errorSheetName,
         folderUrl,
         appended,
+        appendedErrors,
         skippedDuplicates,
+        skippedCanceled,
         skippedParseFailures,
         completed: false,
         progress: updated
@@ -193,13 +218,17 @@ function syncUberReceiptsByLabel_(labelName: string): SyncResult {
     const threads = label.getThreads(offset, THREAD_PAGE_SIZE);
     if (!threads || threads.length === 0) {
       flushPendingRows_(sheet, pendingRows);
+      flushPendingErrorRows_(errorSheet, pendingErrorRows);
       saveProgress_(labelName, { offset: 0, completed: true });
       const updated = getProgress_(labelName);
       return {
         sheetName,
+        errorSheetName,
         folderUrl,
         appended,
+        appendedErrors,
         skippedDuplicates,
+        skippedCanceled,
         skippedParseFailures,
         completed: true,
         progress: updated
@@ -228,12 +257,27 @@ function syncUberReceiptsByLabel_(labelName: string): SyncResult {
           continue;
         }
 
-        const parsed = parseUberReceiptFromMessage_(message);
-        if (!parsed) {
-          skippedParseFailures += 1;
+        if (isCanceledReceiptMessage_(message)) {
+          skippedCanceled += 1;
           continue;
         }
 
+        const outcome = parseUberReceiptFromMessage_(message);
+        if (outcome.status === 'error') {
+          skippedParseFailures += 1;
+          const messageId = message.getId();
+          if (!errorIds.has(messageId)) {
+            pendingErrorRows.push(buildErrorRow_(message, outcome.reason));
+            errorIds.add(messageId);
+            appendedErrors += 1;
+            if (pendingErrorRows.length >= WRITE_BATCH_ROWS) {
+              flushPendingErrorRows_(errorSheet, pendingErrorRows);
+            }
+          }
+          continue;
+        }
+
+        const parsed = outcome.parsed;
         const key = buildUniqueKey_(parsed);
         if (uniqueKeys.has(key)) {
           skippedDuplicates += 1;
@@ -261,19 +305,24 @@ function syncUberReceiptsByLabel_(labelName: string): SyncResult {
 
       if (offset % SAVE_PROGRESS_EVERY_THREADS === 0) {
         flushPendingRows_(sheet, pendingRows);
+        flushPendingErrorRows_(errorSheet, pendingErrorRows);
         saveProgress_(labelName, { offset, completed: false });
       }
     }
 
     if (timeNearlyUp) {
       flushPendingRows_(sheet, pendingRows);
+      flushPendingErrorRows_(errorSheet, pendingErrorRows);
       saveProgress_(labelName, { offset, completed: false });
       const updated = getProgress_(labelName);
       return {
         sheetName,
+        errorSheetName,
         folderUrl,
         appended,
+        appendedErrors,
         skippedDuplicates,
+        skippedCanceled,
         skippedParseFailures,
         completed: false,
         progress: updated
@@ -291,16 +340,42 @@ function flushPendingRows_(
   sheet: GoogleAppsScript.Spreadsheet.Sheet,
   pendingRows: (string | number)[][]
 ): void {
+  flushPendingRowsToSheet_(sheet, pendingRows, UBER_HEADERS.length);
+}
+
+/**
+ * Flush pending error rows to the sheet.
+ * @param sheet Target sheet.
+ * @param pendingRows Rows to append.
+ */
+function flushPendingErrorRows_(
+  sheet: GoogleAppsScript.Spreadsheet.Sheet,
+  pendingRows: (string | number)[][]
+): void {
+  flushPendingRowsToSheet_(sheet, pendingRows, UBER_ERROR_HEADERS.length);
+}
+
+/**
+ * Flush pending rows to the target sheet.
+ * @param sheet Target sheet.
+ * @param pendingRows Rows to append.
+ * @param columnCount Column count.
+ */
+function flushPendingRowsToSheet_(
+  sheet: GoogleAppsScript.Spreadsheet.Sheet,
+  pendingRows: (string | number)[][],
+  columnCount: number
+): void {
   if (!pendingRows.length) {
     return;
   }
 
   const startRow = sheet.getLastRow() + 1;
-  sheet.getRange(startRow, 1, pendingRows.length, UBER_HEADERS.length).setValues(pendingRows);
+  sheet.getRange(startRow, 1, pendingRows.length, columnCount).setValues(pendingRows);
   pendingRows.length = 0;
 
   try {
-    sheet.autoResizeColumns(1, UBER_HEADERS.length);
+    sheet.autoResizeColumns(1, columnCount);
   } catch (error) {
     logInfo('autoResizeColumns failed (non-blocking).', error);
   }
@@ -383,6 +458,7 @@ function isTimeNearlyUp_(startedAt: number): boolean {
  * Prompt for Gmail label.
  * @param ui Spreadsheet UI.
  * @param title Prompt title.
+ * @returns Label name or null.
  */
 function promptLabelName_(ui: GoogleAppsScript.Base.Ui, title: string): string | null {
   const resp = ui.prompt(title, '請輸入 Gmail 標籤名稱（例如 uber202601）', ui.ButtonSet.OK_CANCEL);
@@ -439,6 +515,23 @@ function ensureSheetForLabel_(labelName: string): GoogleAppsScript.Spreadsheet.S
 }
 
 /**
+ * Create/use error sheet tab named as label with suffix.
+ * @param labelName Gmail label name.
+ * @returns Error sheet for the label.
+ */
+function ensureErrorSheetForLabel_(labelName: string): GoogleAppsScript.Spreadsheet.Sheet {
+  const spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
+  const desiredName = sanitizeSheetName_(`${labelName}_執行錯誤`);
+
+  let sheet = spreadsheet.getSheetByName(desiredName);
+  if (!sheet) {
+    sheet = spreadsheet.insertSheet(desiredName);
+  }
+
+  return sheet;
+}
+
+/**
  * Ensure header row is correct + set some formatting.
  * @param sheet Sheet to format.
  * @returns Nothing.
@@ -459,6 +552,32 @@ function ensureHeaderRow_(sheet: GoogleAppsScript.Spreadsheet.Sheet): void {
   sheet.getRange('B:B').setNumberFormat('@');
   sheet.getRange('C:C').setNumberFormat('@');
   sheet.getRange('D:D').setNumberFormat('0.00');
+  sheet.getRange('E:E').setNumberFormat('@');
+
+  return undefined;
+}
+
+/**
+ * Ensure error header row is correct + set formatting.
+ * @param sheet Sheet to format.
+ * @returns Nothing.
+ */
+function ensureErrorHeaderRow_(sheet: GoogleAppsScript.Spreadsheet.Sheet): void {
+  const range = sheet.getRange(1, 1, 1, UBER_ERROR_HEADERS.length);
+  const current = range.getValues()[0];
+
+  const matches = UBER_ERROR_HEADERS.every((header, index) => String(current[index] || '').trim() === header);
+
+  if (!matches) {
+    range.setValues([Array.from(UBER_ERROR_HEADERS)]);
+  }
+
+  sheet.setFrozenRows(1);
+
+  sheet.getRange('A:A').setNumberFormat('@');
+  sheet.getRange('B:B').setNumberFormat('@');
+  sheet.getRange('C:C').setNumberFormat('@');
+  sheet.getRange('D:D').setNumberFormat('@');
   sheet.getRange('E:E').setNumberFormat('@');
 
   return undefined;
@@ -496,38 +615,88 @@ function loadExistingUniqueKeys_(sheet: GoogleAppsScript.Spreadsheet.Sheet): Set
 }
 
 /**
+ * Load existing error message ids from sheet rows.
+ * @param sheet Sheet to read from.
+ * @returns Message id set.
+ */
+function loadExistingErrorIds_(sheet: GoogleAppsScript.Spreadsheet.Sheet): Set<string> {
+  const lastRow = sheet.getLastRow();
+  if (lastRow < 2) {
+    return new Set();
+  }
+
+  const values = sheet.getRange(2, 4, lastRow - 1, 1).getValues();
+  const ids = new Set<string>();
+
+  values.forEach((row) => {
+    const id = String(row[0] || '').trim();
+    if (id) {
+      ids.add(id);
+    }
+  });
+
+  return ids;
+}
+
+/**
  * Parse Uber receipt info from a Gmail message.
  * @param message Gmail message.
- * @returns Parsed receipt or null when missing fields.
+ * @returns Parsed receipt outcome.
  */
 function parseUberReceiptFromMessage_(
   message: GoogleAppsScript.Gmail.GmailMessage
-): ParsedUberReceipt | null {
+): ParseOutcome {
   const plain = (message.getPlainBody() || '').replace(/\r\n/g, '\n');
   const html = message.getBody() || '';
 
   const dt = extractRideDateTime_(plain, html);
   if (!dt) {
-    return null;
+    return { status: 'error', reason: '缺少日期/時間' };
   }
 
   const fare = extractTotalFare_(plain, html);
   if (fare == null || Number.isNaN(fare)) {
-    return null;
+    return { status: 'error', reason: '缺少價格' };
   }
 
   const vehicleRaw = extractVehicle_(plain, html);
   const vehicle = normalizeVehicle_(vehicleRaw || '');
   if (!vehicle) {
-    return null;
+    return { status: 'error', reason: '缺少車牌' };
   }
 
   return {
-    rideDate: dt.rideDate,
-    rideTime: dt.rideTime,
-    vehicle,
-    fare: Number(fare.toFixed(2))
+    status: 'ok',
+    parsed: {
+      rideDate: dt.rideDate,
+      rideTime: dt.rideTime,
+      vehicle,
+      fare: Number(fare.toFixed(2))
+    }
   };
+}
+
+/**
+ * Build a row for the error sheet.
+ * @param message Gmail message.
+ * @param reason Failure reason.
+ * @returns Row values.
+ */
+function buildErrorRow_(
+  message: GoogleAppsScript.Gmail.GmailMessage,
+  reason: string
+): (string | number)[] {
+  const date = message.getDate();
+  const tz = Session.getScriptTimeZone();
+  const formatted = Utilities.formatDate(date, tz, 'yyyy-MM-dd HH:mm:ss');
+  const subject = message.getSubject() || '';
+  const snippet = message.getPlainBody() || message.getBody() || '';
+  const trimmedSnippet = String(snippet)
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 200);
+
+  return [formatted, subject, reason, message.getId(), trimmedSnippet];
 }
 
 /**
@@ -834,6 +1003,28 @@ function isFinalUberReceiptMessage_(message: GoogleAppsScript.Gmail.GmailMessage
   }
 
   return true;
+}
+
+/**
+ * Check whether message is a canceled trip receipt.
+ * @param message Gmail message.
+ * @returns True if it looks like a canceled receipt.
+ */
+function isCanceledReceiptMessage_(message: GoogleAppsScript.Gmail.GmailMessage): boolean {
+  const plain = message.getPlainBody() || '';
+  const html = message.getBody() || '';
+  const htmlText = stripHtmlToText_(html);
+  const combined = `${plain}\n${htmlText}`.toLowerCase().replace(/\s+/g, ' ').trim();
+
+  const canceledIndicators = [
+    'canceled',
+    'cancelled',
+    'cancellation fee',
+    '取消',
+    '已取消'
+  ];
+
+  return canceledIndicators.some((text) => combined.includes(text));
 }
 
 /**
