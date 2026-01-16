@@ -52,6 +52,12 @@ type OutputRow = {
   createdAt: Date;
 };
 
+type FormUrls = {
+  publishedUrl: string;
+  editUrl: string;
+  publishedUrlWarning: string | null;
+};
+
 /**
  * Generates a new Google Form from a template and inserts speaker rating blocks.
  * It reads speaker data from the spreadsheet and writes back the created URLs.
@@ -118,10 +124,12 @@ export function generateSpeakerFeedbackForm(): void {
     }
   }
 
+  const formUrls = getFormUrls_(form);
+
   writeOutputRow_(spreadsheet, {
     createdFormId: newFile.getId(),
-    publishedUrl: form.getPublishedUrl(),
-    editUrl: form.getEditUrl(),
+    publishedUrl: formUrls.publishedUrl,
+    editUrl: formUrls.editUrl,
     createdAt: new Date()
   });
 
@@ -135,8 +143,10 @@ export function generateSpeakerFeedbackForm(): void {
         ? `Marker：已找到「${config.markerTitle}」，題組已插入 marker 後方`
         : `⚠️ Marker：找不到「${config.markerTitle}」，題組已直接加在表單最後（建議回模板補 marker）`,
       '',
-      `填寫連結：${form.getPublishedUrl()}`,
-      `編輯連結：${form.getEditUrl()}`
+      formUrls.publishedUrlWarning
+        ? `⚠️ 填寫連結：${formUrls.publishedUrlWarning}`
+        : `填寫連結：${formUrls.publishedUrl}`,
+      `編輯連結：${formUrls.editUrl}`
     ].join('\n'),
   );
 
@@ -290,10 +300,31 @@ function getDefaultOutputFolder_(spreadsheetId: string): GoogleAppsScript.Drive.
 }
 
 /**
+ * Safely resolves form URLs when the form might not be published yet.
+ * @param form Target form.
+ * @returns Form URLs and warning message when unpublished.
+ */
+function getFormUrls_(form: GoogleAppsScript.Forms.Form): FormUrls {
+  let publishedUrl = '';
+  let publishedUrlWarning: string | null = null;
+
+  try {
+    publishedUrl = form.getPublishedUrl();
+  } catch {
+    publishedUrlWarning = '尚未發布表單，請先在 Google Forms 點擊一次「傳送」後再取得連結';
+  }
+
+  return {
+    publishedUrl,
+    editUrl: form.getEditUrl(),
+    publishedUrlWarning
+  };
+}
+
+/**
  * Writes output metadata into a dedicated output sheet.
  * @param spreadsheet Spreadsheet container.
  * @param output Output data.
- * @returns Nothing.
  */
 function writeOutputRow_(
   spreadsheet: GoogleAppsScript.Spreadsheet.Spreadsheet,
