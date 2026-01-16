@@ -91,6 +91,7 @@ export function generateSpeakerFeedbackForm(): void {
   const form = FormApp.openById(newFile.getId());
 
   form.setTitle(formTitle).setAcceptingResponses(true);
+  publishFormIfSupported_(form);
 
   const markerIndex = findItemIndexByTitle_(form, config.markerTitle);
   const hasMarker = markerIndex >= 0;
@@ -310,8 +311,12 @@ function getFormUrls_(form: GoogleAppsScript.Forms.Form): FormUrls {
 
   try {
     publishedUrl = form.getPublishedUrl();
-  } catch {
-    publishedUrlWarning = '尚未發布表單，請先在 Google Forms 點擊一次「傳送」後再取得連結';
+  } catch (error) {
+    if (isUnpublishedFormError_(error)) {
+      publishedUrlWarning = '尚未發布表單，請先在 Google Forms 點擊一次「傳送」後再取得連結';
+    } else {
+      throw error;
+    }
   }
 
   return {
@@ -319,6 +324,43 @@ function getFormUrls_(form: GoogleAppsScript.Forms.Form): FormUrls {
     editUrl: form.getEditUrl(),
     publishedUrlWarning
   };
+}
+
+/**
+ * Detects unpublished form errors when fetching the published URL.
+ * @param error Error thrown from getPublishedUrl.
+ * @returns Whether the error indicates an unpublished form.
+ */
+function isUnpublishedFormError_(error: unknown): boolean {
+  if (error instanceof Error) {
+    const message = error.message || '';
+    return (
+      message.includes('未發布') ||
+      message.includes('unpublished') ||
+      message.includes('not supported on an unpublished form')
+    );
+  }
+  if (typeof error === 'string') {
+    return (
+      error.includes('未發布') ||
+      error.includes('unpublished') ||
+      error.includes('not supported on an unpublished form')
+    );
+  }
+  return false;
+}
+
+/**
+ * Publishes a form when the API supports it (type-safe guard for GAS typings).
+ * @param form Target form.
+ */
+function publishFormIfSupported_(form: GoogleAppsScript.Forms.Form): void {
+  const candidate = form as GoogleAppsScript.Forms.Form & {
+    setPublished?: (enabled: boolean) => GoogleAppsScript.Forms.Form;
+  };
+  if (typeof candidate.setPublished === 'function') {
+    candidate.setPublished(true);
+  }
 }
 
 /**
