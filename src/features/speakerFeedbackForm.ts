@@ -316,6 +316,11 @@ function toNumber_(value: GoogleAppsScript.Base.CellValue, fallback: number): nu
   return Number.isFinite(parsed) ? parsed : fallback;
 }
 
+/**
+ * Parses a pipe-delimited cell value into a trimmed string array.
+ * @param value Cell value to parse.
+ * @returns Parsed items, or an empty array when blank.
+ */
 function parseDelimited_(value: GoogleAppsScript.Base.CellValue): string[] {
   if (value === null || typeof value === 'undefined' || value === '') {
     return [];
