@@ -90,7 +90,8 @@ export function generateSpeakerFeedbackForm(): void {
   const newFile = templateFile.makeCopy(formTitle, targetFolder);
   const form = FormApp.openById(newFile.getId());
 
-  form.setTitle(formTitle).setAcceptingResponses(true);
+  form.setTitle(formTitle);
+  const acceptingResponsesWarning = setAcceptingResponsesIfPossible_(form, true);
   publishFormIfSupported_(form);
 
   const markerIndex = findItemIndexByTitle_(form, config.markerTitle);
@@ -144,11 +145,14 @@ export function generateSpeakerFeedbackForm(): void {
         ? `Marker：已找到「${config.markerTitle}」，題組已插入 marker 後方`
         : `⚠️ Marker：找不到「${config.markerTitle}」，題組已直接加在表單最後（建議回模板補 marker）`,
       '',
+      acceptingResponsesWarning ? `⚠️ 回應狀態：${acceptingResponsesWarning}` : null,
       formUrls.publishedUrlWarning
         ? `⚠️ 填寫連結：${formUrls.publishedUrlWarning}`
         : `填寫連結：${formUrls.publishedUrl}`,
       `編輯連結：${formUrls.editUrl}`
-    ].join('\n'),
+    ]
+      .filter((line): line is string => Boolean(line))
+      .join('\n'),
   );
 
   return undefined;
@@ -360,6 +364,27 @@ function publishFormIfSupported_(form: GoogleAppsScript.Forms.Form): void {
   };
   if (typeof candidate.setPublished === 'function') {
     candidate.setPublished(true);
+  }
+}
+
+/**
+ * Safely toggles accepting responses when the form might not be published yet.
+ * @param form Target form.
+ * @param enabled Whether responses should be accepted.
+ * @returns Warning message when the form is unpublished.
+ */
+function setAcceptingResponsesIfPossible_(
+  form: GoogleAppsScript.Forms.Form,
+  enabled: boolean,
+): string | null {
+  try {
+    form.setAcceptingResponses(enabled);
+    return null;
+  } catch (error) {
+    if (isUnpublishedFormError_(error)) {
+      return '尚未發布表單，無法切換回應狀態（請在 Google Forms 點擊一次「傳送」後再試）';
+    }
+    throw error;
   }
 }
 
