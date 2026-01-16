@@ -13,7 +13,9 @@ const DEFAULT_RATING_ROWS = [
 
 const DEFAULT_RATING_COLUMNS = ['1. 非常低', '2. 低', '3. 普通', '4. 高', '5. 非常高'];
 
-type ConfigMap = Record<string, GoogleAppsScript.Base.CellValue>;
+type CellValue = string | number | boolean | Date | null | undefined;
+
+type ConfigMap = Record<string, CellValue>;
 
 type SpeakerRow = {
   formTitle: string;
@@ -121,6 +123,11 @@ export function generateSpeakerFeedbackForm(): void {
   return undefined;
 }
 
+/**
+ * Reads key/value configuration pairs from the config sheet.
+ * @param sheet Config sheet.
+ * @returns Raw config map.
+ */
 function readConfig_(sheet: GoogleAppsScript.Spreadsheet.Sheet): ConfigMap {
   const lastRow = sheet.getLastRow();
   if (lastRow < 2) {
@@ -139,6 +146,11 @@ function readConfig_(sheet: GoogleAppsScript.Spreadsheet.Sheet): ConfigMap {
   return config;
 }
 
+/**
+ * Normalizes raw config values into a typed speaker config.
+ * @param config Raw config map.
+ * @returns Normalized speaker configuration.
+ */
 function normalizeConfig_(config: ConfigMap): SpeakerConfig {
   const templateFormId = requireValue_(config.template_form_id, 'template_form_id');
   const outputFolderId = requireValue_(config.output_folder_id, 'output_folder_id');
@@ -168,6 +180,11 @@ function normalizeConfig_(config: ConfigMap): SpeakerConfig {
   };
 }
 
+/**
+ * Reads speaker rows from the data sheet.
+ * @param sheet Data sheet.
+ * @returns Parsed speaker rows.
+ */
 function readSpeakerRows_(sheet: GoogleAppsScript.Spreadsheet.Sheet): SpeakerRow[] {
   const lastRow = sheet.getLastRow();
   const lastCol = sheet.getLastColumn();
@@ -195,6 +212,13 @@ function readSpeakerRows_(sheet: GoogleAppsScript.Spreadsheet.Sheet): SpeakerRow
   }));
 }
 
+/**
+ * Finds the index of the first matching header label.
+ * @param headerLower Normalized header row.
+ * @param candidates Candidate header names.
+ * @param fallback Fallback index when no match is found.
+ * @returns Matching index or fallback.
+ */
 function findHeaderIndex_(headerLower: string[], candidates: string[], fallback: number): number {
   for (const candidate of candidates) {
     const index = headerLower.indexOf(candidate.toLowerCase());
@@ -205,6 +229,12 @@ function findHeaderIndex_(headerLower: string[], candidates: string[], fallback:
   return fallback;
 }
 
+/**
+ * Determines whether a speaker row should be included.
+ * @param row Speaker row.
+ * @param config Normalized speaker config.
+ * @returns True when the row should be included.
+ */
 function shouldIncludeSpeaker_(row: SpeakerRow, config: SpeakerConfig): boolean {
   const name = row.speakerName.trim();
   if (!name) {
@@ -219,6 +249,12 @@ function shouldIncludeSpeaker_(row: SpeakerRow, config: SpeakerConfig): boolean 
   return true;
 }
 
+/**
+ * Determines the form title based on config or speaker rows.
+ * @param rows Speaker rows.
+ * @param config Raw config map.
+ * @returns Form title.
+ */
 function getFormTitle_(rows: SpeakerRow[], config: ConfigMap): string {
   const explicitTitle = toText_(config.form_title, '').trim();
   if (explicitTitle) {
@@ -229,6 +265,14 @@ function getFormTitle_(rows: SpeakerRow[], config: ConfigMap): string {
   return sheetTitle.trim() || DEFAULT_FORM_TITLE;
 }
 
+/**
+ * Builds the question title for a given speaker row.
+ * @param row Speaker row.
+ * @param prefix Question prefix label.
+ * @param index Speaker index.
+ * @param startNumber Starting question number.
+ * @returns Question title.
+ */
 function buildQuestionTitle_(
   row: SpeakerRow,
   prefix: string,
@@ -241,6 +285,12 @@ function buildQuestionTitle_(
   return `${numberLabel} 對於 ${speakerLabel}`;
 }
 
+/**
+ * Finds the index of a form item by title.
+ * @param form Target form.
+ * @param title Item title to locate.
+ * @returns Item index or -1 if not found.
+ */
 function findItemIndexByTitle_(form: GoogleAppsScript.Forms.Form, title: string): number {
   const items = form.getItems();
   for (const item of items) {
@@ -251,6 +301,13 @@ function findItemIndexByTitle_(form: GoogleAppsScript.Forms.Form, title: string)
   return -1;
 }
 
+/**
+ * Updates or inserts a config value by key.
+ * @param sheet Config sheet.
+ * @param key Config key.
+ * @param value Config value.
+ * @returns Nothing.
+ */
 function upsertConfig_(sheet: GoogleAppsScript.Spreadsheet.Sheet, key: string, value: unknown): void {
   const lastRow = sheet.getLastRow();
   if (lastRow < 2) {
@@ -269,6 +326,12 @@ function upsertConfig_(sheet: GoogleAppsScript.Spreadsheet.Sheet, key: string, v
   sheet.appendRow([key, value]);
 }
 
+/**
+ * Loads a required sheet by name.
+ * @param spreadsheet Spreadsheet container.
+ * @param name Sheet name.
+ * @returns Sheet instance.
+ */
 function getRequiredSheet_(
   spreadsheet: GoogleAppsScript.Spreadsheet.Spreadsheet,
   name: string,
@@ -280,21 +343,39 @@ function getRequiredSheet_(
   return sheet;
 }
 
-function requireValue_(value: GoogleAppsScript.Base.CellValue, keyName: string) {
+/**
+ * Ensures a config value is present.
+ * @param value Config cell value.
+ * @param keyName Config key name.
+ * @returns Non-empty value.
+ */
+function requireValue_(value: CellValue, keyName: string) {
   if (value === '' || value === null || typeof value === 'undefined') {
     throw new Error(`Config 缺少必填欄位：${keyName}`);
   }
   return value;
 }
 
-function toText_(value: GoogleAppsScript.Base.CellValue, fallback: string): string {
+/**
+ * Converts a cell value to trimmed text.
+ * @param value Cell value.
+ * @param fallback Fallback string.
+ * @returns Trimmed text.
+ */
+function toText_(value: CellValue, fallback: string): string {
   if (value === null || typeof value === 'undefined') {
     return fallback;
   }
   return value.toString().trim();
 }
 
-function toBoolean_(value: GoogleAppsScript.Base.CellValue, fallback: boolean): boolean {
+/**
+ * Converts a cell value to boolean.
+ * @param value Cell value.
+ * @param fallback Fallback boolean.
+ * @returns Parsed boolean.
+ */
+function toBoolean_(value: CellValue, fallback: boolean): boolean {
   if (typeof value === 'boolean') {
     return value;
   }
@@ -305,7 +386,13 @@ function toBoolean_(value: GoogleAppsScript.Base.CellValue, fallback: boolean): 
   return ['TRUE', 'T', 'YES', 'Y', '1'].includes(normalized);
 }
 
-function toNumber_(value: GoogleAppsScript.Base.CellValue, fallback: number): number {
+/**
+ * Converts a cell value to number.
+ * @param value Cell value.
+ * @param fallback Fallback number.
+ * @returns Parsed number.
+ */
+function toNumber_(value: CellValue, fallback: number): number {
   if (typeof value === 'number') {
     return Number.isFinite(value) ? value : fallback;
   }
@@ -316,13 +403,18 @@ function toNumber_(value: GoogleAppsScript.Base.CellValue, fallback: number): nu
   return Number.isFinite(parsed) ? parsed : fallback;
 }
 
-function parseDelimited_(value: GoogleAppsScript.Base.CellValue): string[] {
+/**
+ * Parses a pipe-delimited cell value into a trimmed string array.
+ * @param value Cell value to parse.
+ * @returns Parsed items, or an empty array when blank.
+ */
+function parseDelimited_(value: CellValue): string[] {
   if (value === null || typeof value === 'undefined' || value === '') {
     return [];
   }
   return value
     .toString()
     .split('|')
-    .map((item) => item.trim())
+    .map((item: string) => item.trim())
     .filter(Boolean);
 }

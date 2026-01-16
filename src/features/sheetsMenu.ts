@@ -1,12 +1,5 @@
-import { logInfo } from '../lib/logger';
-
-const MENU_NAME = 'Uber 收據';
-const MENU_IMPORT = '匯入/繼續匯入（輸入 Gmail 標籤）';
-const MENU_STATUS = '查看進度（輸入 Gmail 標籤）';
-const MENU_RESET = '重置進度（輸入 Gmail 標籤）';
-
-const FORM_MENU_NAME = '表單產生器';
-const FORM_MENU_CREATE = '生成講者回饋表單';
+const MENU_NAME = '表單產生器';
+const MENU_CREATE_FORM = '生成講者回饋表單';
 
 /**
  * Adds a custom menu to a container-bound Spreadsheet when it is opened.
@@ -16,17 +9,8 @@ const FORM_MENU_CREATE = '生成講者回饋表單';
  * @returns Nothing.
  */
 export function onOpen(_e: GoogleAppsScript.Events.SheetsOnOpen): void {
-  logInfo('onOpen() fired - adding custom menu');
-
   const ui = SpreadsheetApp.getUi();
-  ui
-    .createMenu(MENU_NAME)
-    .addItem(MENU_IMPORT, 'uiPromptAndSyncUberReceipts')
-    .addItem(MENU_STATUS, 'uiPromptAndShowProgress')
-    .addItem(MENU_RESET, 'uiPromptAndResetProgress')
-    .addToUi();
-
-  ui.createMenu(FORM_MENU_NAME).addItem(FORM_MENU_CREATE, 'generateSpeakerFeedbackForm').addToUi();
+  ui.createMenu(MENU_NAME).addItem(MENU_CREATE_FORM, 'generateSpeakerFeedbackForm').addToUi();
 
   return undefined;
 }
