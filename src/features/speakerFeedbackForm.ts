@@ -1,4 +1,7 @@
-const CONFIG_SHEET_NAME = 'Config';
+const FIXED_SPREADSHEET_ID = '1HzS_hQWZdsgBa4IAnKYxqjo2s7BjVxsVOsajIxJ1yCw';
+const FIXED_DATA_SHEET_ID = 1576736650;
+const TEMPLATE_FORM_ID = '1EelmbBwTrqvncthzXeyf_BI5O2hGbuh9ITZ3SoEqiNQ';
+const OUTPUT_SHEET_NAME = 'Output';
 const DEFAULT_MARKER_TITLE = '[[SPEAKER_BLOCKS]]';
 const DEFAULT_FORM_TITLE = '講者回饋表單';
 const DEFAULT_QUESTION_PREFIX = 'A';
@@ -13,9 +16,16 @@ const DEFAULT_RATING_ROWS = [
 
 const DEFAULT_RATING_COLUMNS = ['1. 非常低', '2. 低', '3. 普通', '4. 高', '5. 非常高'];
 
-type CellValue = string | number | boolean | Date | null | undefined;
+const COLUMN_NAME_CANDIDATES = ['講者名稱', 'speaker', 'speaker name'];
+const COLUMN_TOPIC_CANDIDATES = ['講者主題', 'topic', 'title'];
+const COLUMN_STATUS_CANDIDATES = ['狀態', 'status'];
+const COLUMN_FORM_TITLE_CANDIDATES = ['表單名稱', 'form title', 'form_name'];
 
-type ConfigMap = Record<string, CellValue>;
+const QUESTION_START_NUMBER = 1;
+const QUESTION_REQUIRED = true;
+const REMOVE_MARKER = true;
+
+type CellValue = string | number | boolean | Date | null | undefined;
 
 type SpeakerRow = {
   formTitle: string;
@@ -25,10 +35,7 @@ type SpeakerRow = {
 };
 
 type SpeakerConfig = {
-  templateFormId: string;
-  outputFolderId: string;
   markerTitle: string;
-  dataSheetName?: string;
   questionPrefix: string;
   questionStartNumber: number;
   questionRequired: boolean;
@@ -38,20 +45,31 @@ type SpeakerConfig = {
   ignoreStatuses: string[];
 };
 
+type OutputRow = {
+  createdFormId: string;
+  publishedUrl: string;
+  editUrl: string;
+  createdAt: Date;
+};
+
 /**
  * Generates a new Google Form from a template and inserts speaker rating blocks.
  * It reads speaker data from the spreadsheet and writes back the created URLs.
  * @returns Nothing.
  */
 export function generateSpeakerFeedbackForm(): void {
-  const spreadsheet = SpreadsheetApp.getActive();
-  const configSheet = getRequiredSheet_(spreadsheet, CONFIG_SHEET_NAME);
-  const rawConfig = readConfig_(configSheet);
-  const config = normalizeConfig_(rawConfig);
-
-  const dataSheet = config.dataSheetName
-    ? getRequiredSheet_(spreadsheet, config.dataSheetName)
-    : spreadsheet.getActiveSheet();
+  const spreadsheet = SpreadsheetApp.openById(FIXED_SPREADSHEET_ID);
+  const dataSheet = getRequiredSheetById_(spreadsheet, FIXED_DATA_SHEET_ID);
+  const config: SpeakerConfig = {
+    markerTitle: DEFAULT_MARKER_TITLE,
+    questionPrefix: DEFAULT_QUESTION_PREFIX,
+    questionStartNumber: QUESTION_START_NUMBER,
+    questionRequired: QUESTION_REQUIRED,
+    removeMarker: REMOVE_MARKER,
+    ratingRows: DEFAULT_RATING_ROWS,
+    ratingColumns: DEFAULT_RATING_COLUMNS,
+    ignoreStatuses: DEFAULT_IGNORE_STATUSES
+  };
 
   const speakerRows = readSpeakerRows_(dataSheet);
   const filteredSpeakers = speakerRows.filter((row) => shouldIncludeSpeaker_(row, config));
@@ -60,9 +78,9 @@ export function generateSpeakerFeedbackForm(): void {
     throw new Error('找不到任何講者資料，請確認講者名稱與主題欄位是否有內容。');
   }
 
-  const formTitle = getFormTitle_(filteredSpeakers, rawConfig);
-  const templateFile = DriveApp.getFileById(config.templateFormId);
-  const targetFolder = DriveApp.getFolderById(config.outputFolderId);
+  const formTitle = getFormTitle_(filteredSpeakers);
+  const templateFile = DriveApp.getFileById(TEMPLATE_FORM_ID);
+  const targetFolder = getDefaultOutputFolder_(FIXED_SPREADSHEET_ID);
   const newFile = templateFile.makeCopy(formTitle, targetFolder);
   const form = FormApp.openById(newFile.getId());
 
@@ -100,10 +118,12 @@ export function generateSpeakerFeedbackForm(): void {
     }
   }
 
-  upsertConfig_(configSheet, 'created_form_id', newFile.getId());
-  upsertConfig_(configSheet, 'published_url', form.getPublishedUrl());
-  upsertConfig_(configSheet, 'edit_url', form.getEditUrl());
-  upsertConfig_(configSheet, 'created_at', new Date());
+  writeOutputRow_(spreadsheet, {
+    createdFormId: newFile.getId(),
+    publishedUrl: form.getPublishedUrl(),
+    editUrl: form.getEditUrl(),
+    createdAt: new Date()
+  });
 
   SpreadsheetApp.getUi().alert(
     [
@@ -124,63 +144,6 @@ export function generateSpeakerFeedbackForm(): void {
 }
 
 /**
- * Reads key/value configuration pairs from the config sheet.
- * @param sheet Config sheet.
- * @returns Raw config map.
- */
-function readConfig_(sheet: GoogleAppsScript.Spreadsheet.Sheet): ConfigMap {
-  const lastRow = sheet.getLastRow();
-  if (lastRow < 2) {
-    return {};
-  }
-
-  const rows = sheet.getRange(2, 1, lastRow - 1, 2).getValues();
-  const config: ConfigMap = {};
-  rows.forEach(([key, value]) => {
-    if (key === '' || key === null || typeof key === 'undefined') {
-      return;
-    }
-    config[String(key).trim()] = value;
-  });
-
-  return config;
-}
-
-/**
- * Normalizes raw config values into a typed speaker config.
- * @param config Raw config map.
- * @returns Normalized speaker configuration.
- */
-function normalizeConfig_(config: ConfigMap): SpeakerConfig {
-  const templateFormId = requireValue_(config.template_form_id, 'template_form_id');
-  const outputFolderId = requireValue_(config.output_folder_id, 'output_folder_id');
-  const markerTitle = toText_(config.marker_title, DEFAULT_MARKER_TITLE);
-  const dataSheetName = toText_(config.data_sheet_name, '');
-  const questionPrefix = toText_(config.question_prefix, DEFAULT_QUESTION_PREFIX);
-  const questionStartNumber = toNumber_(config.question_start_number, 1);
-  const questionRequired = toBoolean_(config.question_required, true);
-  const removeMarker = toBoolean_(config.remove_marker, true);
-
-  const ratingRows = parseDelimited_(config.rating_rows).filter(Boolean);
-  const ratingColumns = parseDelimited_(config.rating_columns).filter(Boolean);
-  const ignoreStatuses = parseDelimited_(config.ignore_statuses).filter(Boolean);
-
-  return {
-    templateFormId: templateFormId.toString().trim(),
-    outputFolderId: outputFolderId.toString().trim(),
-    markerTitle: markerTitle || DEFAULT_MARKER_TITLE,
-    dataSheetName: dataSheetName || undefined,
-    questionPrefix: questionPrefix || DEFAULT_QUESTION_PREFIX,
-    questionStartNumber,
-    questionRequired,
-    removeMarker,
-    ratingRows: ratingRows.length ? ratingRows : DEFAULT_RATING_ROWS,
-    ratingColumns: ratingColumns.length ? ratingColumns : DEFAULT_RATING_COLUMNS,
-    ignoreStatuses: ignoreStatuses.length ? ignoreStatuses : DEFAULT_IGNORE_STATUSES
-  };
-}
-
-/**
  * Reads speaker rows from the data sheet.
  * @param sheet Data sheet.
  * @returns Parsed speaker rows.
@@ -198,10 +161,10 @@ function readSpeakerRows_(sheet: GoogleAppsScript.Spreadsheet.Sheet): SpeakerRow
     .map((cell) => (cell ?? '').toString().trim());
 
   const headerLower = header.map((value) => value.toLowerCase());
-  const formTitleIndex = findHeaderIndex_(headerLower, ['表單名稱', 'form title', 'form_name'], 0);
-  const speakerNameIndex = findHeaderIndex_(headerLower, ['講者名稱', 'speaker', 'speaker name'], 1);
-  const speakerTopicIndex = findHeaderIndex_(headerLower, ['講者主題', 'topic', 'title'], 2);
-  const statusIndex = findHeaderIndex_(headerLower, ['狀態', 'status'], 3);
+  const formTitleIndex = findHeaderIndex_(headerLower, COLUMN_FORM_TITLE_CANDIDATES, 0);
+  const speakerNameIndex = findHeaderIndex_(headerLower, COLUMN_NAME_CANDIDATES, 1);
+  const speakerTopicIndex = findHeaderIndex_(headerLower, COLUMN_TOPIC_CANDIDATES, 2);
+  const statusIndex = findHeaderIndex_(headerLower, COLUMN_STATUS_CANDIDATES, 3);
 
   const rows = sheet.getRange(2, 1, lastRow - 1, lastCol).getValues();
   return rows.map((row) => ({
@@ -250,17 +213,11 @@ function shouldIncludeSpeaker_(row: SpeakerRow, config: SpeakerConfig): boolean 
 }
 
 /**
- * Determines the form title based on config or speaker rows.
+ * Determines the form title based on speaker rows.
  * @param rows Speaker rows.
- * @param config Raw config map.
  * @returns Form title.
  */
-function getFormTitle_(rows: SpeakerRow[], config: ConfigMap): string {
-  const explicitTitle = toText_(config.form_title, '').trim();
-  if (explicitTitle) {
-    return explicitTitle;
-  }
-
+function getFormTitle_(rows: SpeakerRow[]): string {
   const sheetTitle = rows.find((row) => row.formTitle.trim())?.formTitle ?? '';
   return sheetTitle.trim() || DEFAULT_FORM_TITLE;
 }
@@ -302,58 +259,67 @@ function findItemIndexByTitle_(form: GoogleAppsScript.Forms.Form, title: string)
 }
 
 /**
- * Updates or inserts a config value by key.
- * @param sheet Config sheet.
- * @param key Config key.
- * @param value Config value.
- * @returns Nothing.
- */
-function upsertConfig_(sheet: GoogleAppsScript.Spreadsheet.Sheet, key: string, value: unknown): void {
-  const lastRow = sheet.getLastRow();
-  if (lastRow < 2) {
-    sheet.getRange(1, 1, 1, 2).setValues([['key', 'value']]);
-  }
-
-  const data = sheet.getRange(2, 1, Math.max(sheet.getLastRow() - 1, 1), 2).getValues();
-  for (let i = 0; i < data.length; i += 1) {
-    const existingKey = (data[i][0] ?? '').toString().trim();
-    if (existingKey === key) {
-      sheet.getRange(i + 2, 2).setValue(value);
-      return;
-    }
-  }
-
-  sheet.appendRow([key, value]);
-}
-
-/**
- * Loads a required sheet by name.
+ * Loads a required sheet by ID.
  * @param spreadsheet Spreadsheet container.
- * @param name Sheet name.
+ * @param sheetId Sheet gid.
  * @returns Sheet instance.
  */
-function getRequiredSheet_(
+function getRequiredSheetById_(
   spreadsheet: GoogleAppsScript.Spreadsheet.Spreadsheet,
-  name: string,
+  sheetId: number,
 ): GoogleAppsScript.Spreadsheet.Sheet {
-  const sheet = spreadsheet.getSheetByName(name);
+  const sheet = spreadsheet.getSheetById(sheetId);
   if (!sheet) {
-    throw new Error(`找不到工作表：${name}`);
+    throw new Error(`找不到工作表：${sheetId}`);
   }
   return sheet;
 }
 
 /**
- * Ensures a config value is present.
- * @param value Config cell value.
- * @param keyName Config key name.
- * @returns Non-empty value.
+ * Resolves a default output folder for generated forms.
+ * @param spreadsheetId Spreadsheet id.
+ * @returns Drive folder.
  */
-function requireValue_(value: CellValue, keyName: string) {
-  if (value === '' || value === null || typeof value === 'undefined') {
-    throw new Error(`Config 缺少必填欄位：${keyName}`);
+function getDefaultOutputFolder_(spreadsheetId: string): GoogleAppsScript.Drive.Folder {
+  const file = DriveApp.getFileById(spreadsheetId);
+  const parents = file.getParents();
+  if (parents.hasNext()) {
+    return parents.next();
   }
-  return value;
+  return DriveApp.getRootFolder();
+}
+
+/**
+ * Writes output metadata into a dedicated output sheet.
+ * @param spreadsheet Spreadsheet container.
+ * @param output Output data.
+ * @returns Nothing.
+ */
+function writeOutputRow_(
+  spreadsheet: GoogleAppsScript.Spreadsheet.Spreadsheet,
+  output: OutputRow,
+): void {
+  const sheet = getOrCreateOutputSheet_(spreadsheet);
+  const headers = ['created_form_id', 'published_url', 'edit_url', 'created_at'];
+  if (sheet.getLastRow() === 0) {
+    sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
+  }
+  sheet.appendRow([output.createdFormId, output.publishedUrl, output.editUrl, output.createdAt]);
+}
+
+/**
+ * Ensures the output sheet exists.
+ * @param spreadsheet Spreadsheet container.
+ * @returns Output sheet.
+ */
+function getOrCreateOutputSheet_(
+  spreadsheet: GoogleAppsScript.Spreadsheet.Spreadsheet,
+): GoogleAppsScript.Spreadsheet.Sheet {
+  const existingSheet = spreadsheet.getSheetByName(OUTPUT_SHEET_NAME);
+  if (existingSheet) {
+    return existingSheet;
+  }
+  return spreadsheet.insertSheet(OUTPUT_SHEET_NAME);
 }
 
 /**
@@ -367,54 +333,4 @@ function toText_(value: CellValue, fallback: string): string {
     return fallback;
   }
   return value.toString().trim();
-}
-
-/**
- * Converts a cell value to boolean.
- * @param value Cell value.
- * @param fallback Fallback boolean.
- * @returns Parsed boolean.
- */
-function toBoolean_(value: CellValue, fallback: boolean): boolean {
-  if (typeof value === 'boolean') {
-    return value;
-  }
-  if (value === null || typeof value === 'undefined' || value === '') {
-    return fallback;
-  }
-  const normalized = value.toString().trim().toUpperCase();
-  return ['TRUE', 'T', 'YES', 'Y', '1'].includes(normalized);
-}
-
-/**
- * Converts a cell value to number.
- * @param value Cell value.
- * @param fallback Fallback number.
- * @returns Parsed number.
- */
-function toNumber_(value: CellValue, fallback: number): number {
-  if (typeof value === 'number') {
-    return Number.isFinite(value) ? value : fallback;
-  }
-  if (value === null || typeof value === 'undefined' || value === '') {
-    return fallback;
-  }
-  const parsed = Number(value);
-  return Number.isFinite(parsed) ? parsed : fallback;
-}
-
-/**
- * Parses a pipe-delimited cell value into a trimmed string array.
- * @param value Cell value to parse.
- * @returns Parsed items, or an empty array when blank.
- */
-function parseDelimited_(value: CellValue): string[] {
-  if (value === null || typeof value === 'undefined' || value === '') {
-    return [];
-  }
-  return value
-    .toString()
-    .split('|')
-    .map((item: string) => item.trim())
-    .filter(Boolean);
 }
