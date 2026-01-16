@@ -310,7 +310,7 @@ function getFormUrls_(form: GoogleAppsScript.Forms.Form): FormUrls {
 
   try {
     publishedUrl = form.getPublishedUrl();
-  } catch (error) {
+  } catch {
     publishedUrlWarning = '尚未發布表單，請先在 Google Forms 點擊一次「傳送」後再取得連結';
   }
 
@@ -325,7 +325,6 @@ function getFormUrls_(form: GoogleAppsScript.Forms.Form): FormUrls {
  * Writes output metadata into a dedicated output sheet.
  * @param spreadsheet Spreadsheet container.
  * @param output Output data.
- * @returns Nothing.
  */
 function writeOutputRow_(
   spreadsheet: GoogleAppsScript.Spreadsheet.Spreadsheet,
