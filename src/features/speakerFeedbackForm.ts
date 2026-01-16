@@ -13,7 +13,9 @@ const DEFAULT_RATING_ROWS = [
 
 const DEFAULT_RATING_COLUMNS = ['1. 非常低', '2. 低', '3. 普通', '4. 高', '5. 非常高'];
 
-type ConfigMap = Record<string, GoogleAppsScript.Base.CellValue>;
+type CellValue = string | number | boolean | Date | null | undefined;
+
+type ConfigMap = Record<string, CellValue>;
 
 type SpeakerRow = {
   formTitle: string;
@@ -347,7 +349,7 @@ function getRequiredSheet_(
  * @param keyName Config key name.
  * @returns Non-empty value.
  */
-function requireValue_(value: GoogleAppsScript.Base.CellValue, keyName: string) {
+function requireValue_(value: CellValue, keyName: string) {
   if (value === '' || value === null || typeof value === 'undefined') {
     throw new Error(`Config 缺少必填欄位：${keyName}`);
   }
@@ -360,7 +362,7 @@ function requireValue_(value: GoogleAppsScript.Base.CellValue, keyName: string) 
  * @param fallback Fallback string.
  * @returns Trimmed text.
  */
-function toText_(value: GoogleAppsScript.Base.CellValue, fallback: string): string {
+function toText_(value: CellValue, fallback: string): string {
   if (value === null || typeof value === 'undefined') {
     return fallback;
   }
@@ -373,7 +375,7 @@ function toText_(value: GoogleAppsScript.Base.CellValue, fallback: string): stri
  * @param fallback Fallback boolean.
  * @returns Parsed boolean.
  */
-function toBoolean_(value: GoogleAppsScript.Base.CellValue, fallback: boolean): boolean {
+function toBoolean_(value: CellValue, fallback: boolean): boolean {
   if (typeof value === 'boolean') {
     return value;
   }
@@ -390,7 +392,7 @@ function toBoolean_(value: GoogleAppsScript.Base.CellValue, fallback: boolean): 
  * @param fallback Fallback number.
  * @returns Parsed number.
  */
-function toNumber_(value: GoogleAppsScript.Base.CellValue, fallback: number): number {
+function toNumber_(value: CellValue, fallback: number): number {
   if (typeof value === 'number') {
     return Number.isFinite(value) ? value : fallback;
   }
@@ -406,13 +408,13 @@ function toNumber_(value: GoogleAppsScript.Base.CellValue, fallback: number): nu
  * @param value Cell value to parse.
  * @returns Parsed items, or an empty array when blank.
  */
-function parseDelimited_(value: GoogleAppsScript.Base.CellValue): string[] {
+function parseDelimited_(value: CellValue): string[] {
   if (value === null || typeof value === 'undefined' || value === '') {
     return [];
   }
   return value
     .toString()
     .split('|')
-    .map((item) => item.trim())
+    .map((item: string) => item.trim())
     .filter(Boolean);
 }
