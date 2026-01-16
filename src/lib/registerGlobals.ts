@@ -5,10 +5,12 @@ import {
   uiPromptAndSyncUberReceipts
 } from '../features/uberReceipts';
 import { helloScript } from '../features/helloScript';
+import { generateSpeakerFeedbackForm } from '../features/speakerFeedbackForm';
 
 type Entrypoints = {
   helloScript: typeof helloScript;
   onOpen: typeof onOpen;
+  generateSpeakerFeedbackForm: typeof generateSpeakerFeedbackForm;
   uiPromptAndSyncUberReceipts: typeof uiPromptAndSyncUberReceipts;
   uiPromptAndShowProgress: typeof uiPromptAndShowProgress;
   uiPromptAndResetProgress: typeof uiPromptAndResetProgress;
@@ -32,6 +34,7 @@ export function registerGlobalFunctions(): void {
 
   namespace.helloScript = helloScript;
   namespace.onOpen = onOpen;
+  namespace.generateSpeakerFeedbackForm = generateSpeakerFeedbackForm;
   namespace.uiPromptAndSyncUberReceipts = uiPromptAndSyncUberReceipts;
   namespace.uiPromptAndShowProgress = uiPromptAndShowProgress;
   namespace.uiPromptAndResetProgress = uiPromptAndResetProgress;
