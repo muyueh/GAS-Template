@@ -526,6 +526,24 @@ function createSlidesWithQrCode_(formTitle: string, publishedUrl: string): strin
  */
 function createQrCodeBlob_(url: string): GoogleAppsScript.Base.Blob {
   const encodedUrl = encodeURIComponent(url);
-  const qrUrl = `https://chart.googleapis.com/chart?chs=${DEFAULT_QR_CODE_SIZE}x${DEFAULT_QR_CODE_SIZE}&cht=qr&chl=${encodedUrl}`;
-  return UrlFetchApp.fetch(qrUrl).getBlob().setName('qr-code.png');
+  const size = `${DEFAULT_QR_CODE_SIZE}x${DEFAULT_QR_CODE_SIZE}`;
+  const providers = [
+    {
+      name: 'Google Charts API',
+      url: `https://chart.googleapis.com/chart?chs=${size}&cht=qr&chl=${encodedUrl}&chld=L|1`,
+    },
+    {
+      name: 'QuickChart',
+      url: `https://quickchart.io/qr?size=${DEFAULT_QR_CODE_SIZE}&text=${encodedUrl}`,
+    },
+  ];
+
+  for (const provider of providers) {
+    const response = UrlFetchApp.fetch(provider.url, { muteHttpExceptions: true });
+    if (response.getResponseCode() === 200) {
+      return response.getBlob().setName('qr-code.png');
+    }
+  }
+
+  throw new Error('QR code generation failed: all providers returned non-200 responses.');
 }
