@@ -525,8 +525,7 @@ function createSlidesWithQrCode_(formTitle: string, publishedUrl: string): strin
  * @returns PNG blob for the QR code.
  */
 function createQrCodeBlob_(url: string): GoogleAppsScript.Base.Blob {
-  return Charts.newQrCode(url)
-    .setWidth(DEFAULT_QR_CODE_SIZE)
-    .setHeight(DEFAULT_QR_CODE_SIZE)
-    .getAs(MimeType.PNG);
+  const encodedUrl = encodeURIComponent(url);
+  const qrUrl = `https://chart.googleapis.com/chart?chs=${DEFAULT_QR_CODE_SIZE}x${DEFAULT_QR_CODE_SIZE}&cht=qr&chl=${encodedUrl}`;
+  return UrlFetchApp.fetch(qrUrl).getBlob().setName('qr-code.png');
 }
