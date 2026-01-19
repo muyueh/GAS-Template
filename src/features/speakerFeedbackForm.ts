@@ -530,7 +530,7 @@ function createQrCodeBlob_(url: string): GoogleAppsScript.Base.Blob {
   const providers = [
     {
       name: 'Google Charts API',
-      url: `https://chart.googleapis.com/chart?chs=${size}&cht=qr&chl=${encodedUrl}&chld=L|1`,
+      url: `https://chart.googleapis.com/chart?chs=${size}&cht=qr&chl=${encodedUrl}&chld=L%7C1`,
     },
     {
       name: 'QuickChart',
