@@ -539,9 +539,13 @@ function createQrCodeBlob_(url: string): GoogleAppsScript.Base.Blob {
   ];
 
   for (const provider of providers) {
-    const response = UrlFetchApp.fetch(provider.url, { muteHttpExceptions: true });
-    if (response.getResponseCode() === 200) {
-      return response.getBlob().setName('qr-code.png');
+    try {
+      const response = UrlFetchApp.fetch(provider.url, { muteHttpExceptions: true });
+      if (response.getResponseCode() === 200) {
+        return response.getBlob().setName('qr-code.png');
+      }
+    } catch (error) {
+      Logger.log(`QR code provider "${provider.name}" failed to fetch: ${error}`);
     }
   }
 
