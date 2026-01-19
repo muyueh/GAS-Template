@@ -6,6 +6,7 @@ const DEFAULT_MARKER_TITLE = '[[SPEAKER_BLOCKS]]';
 const DEFAULT_FORM_TITLE = '講者回饋表單';
 const DEFAULT_QUESTION_PREFIX = 'A';
 const DEFAULT_IGNORE_STATUSES = ['skip', '忽略', '不產生', '不處理', 'x', '完成', '已完成', 'done', 'completed'];
+const DEFAULT_QR_CODE_SIZE = 512;
 
 const DEFAULT_RATING_ROWS = [
   '整體推薦度',
@@ -50,6 +51,7 @@ type OutputRow = {
   createdFormId: string;
   publishedUrl: string;
   editUrl: string;
+  slidesUrl: string;
   createdAt: Date;
 };
 
@@ -93,8 +95,8 @@ export function generateSpeakerFeedbackForm(): void {
   const form = FormApp.openById(newFile.getId());
 
   form.setTitle(formTitle);
-  const acceptingResponsesWarning = setAcceptingResponsesIfPossible_(form, true);
   publishFormIfSupported_(form);
+  const acceptingResponsesWarning = setAcceptingResponsesIfPossible_(form, true);
 
   const markerIndex = findItemIndexByTitle_(form, config.markerTitle);
   const hasMarker = markerIndex >= 0;
@@ -129,11 +131,16 @@ export function generateSpeakerFeedbackForm(): void {
   }
 
   const formUrls = getFormUrls_(form);
+  if (!formUrls.publishedUrl) {
+    throw new Error('表單尚未發布，無法取得填寫連結。請確認表單是否已發布。');
+  }
+  const slidesUrl = createSlidesWithQrCode_(formTitle, formUrls.publishedUrl);
 
   writeOutputRow_(spreadsheet, {
     createdFormId: newFile.getId(),
     publishedUrl: formUrls.publishedUrl,
     editUrl: formUrls.editUrl,
+    slidesUrl,
     createdAt: new Date()
   });
 
@@ -155,10 +162,9 @@ export function generateSpeakerFeedbackForm(): void {
         : `⚠️ Marker：找不到「${config.markerTitle}」，題組已直接加在表單最後（建議回模板補 marker）`,
       '',
       acceptingResponsesWarning ? `⚠️ 回應狀態：${acceptingResponsesWarning}` : null,
-      formUrls.publishedUrlWarning
-        ? `⚠️ 填寫連結：${formUrls.publishedUrlWarning}`
-        : `填寫連結：${formUrls.publishedUrl}`,
-      `編輯連結：${formUrls.editUrl}`
+      `填寫連結：${formUrls.publishedUrl}`,
+      `編輯連結：${formUrls.editUrl}`,
+      `Google Slides（QR code）：${slidesUrl}`
     ]
       .filter((line): line is string => Boolean(line))
       .join('\n'),
@@ -414,11 +420,25 @@ function writeOutputRow_(
   output: OutputRow,
 ): void {
   const sheet = getOrCreateOutputSheet_(spreadsheet);
-  const headers = ['created_form_id', 'published_url', 'edit_url', 'created_at'];
+  const headers = [
+    'created_form_id',
+    'published_url',
+    'edit_url',
+    'slides_url',
+    'created_at'
+  ];
   if (sheet.getLastRow() === 0) {
     sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
+  } else if (sheet.getLastColumn() < headers.length) {
+    sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
   }
-  sheet.appendRow([output.createdFormId, output.publishedUrl, output.editUrl, output.createdAt]);
+  sheet.appendRow([
+    output.createdFormId,
+    output.publishedUrl,
+    output.editUrl,
+    output.slidesUrl,
+    output.createdAt
+  ]);
 }
 
 /**
@@ -470,4 +490,42 @@ function toText_(value: CellValue, fallback: string): string {
     return fallback;
   }
   return value.toString().trim();
+}
+
+/**
+ * Creates a Google Slides presentation with a blank slide and QR code image.
+ * @param formTitle Presentation title.
+ * @param publishedUrl Published form URL.
+ * @returns Slides presentation URL.
+ */
+function createSlidesWithQrCode_(formTitle: string, publishedUrl: string): string {
+  const presentation = SlidesApp.create(formTitle);
+  const existingSlides = presentation.getSlides();
+  const blankSlide = presentation.appendSlide(SlidesApp.PredefinedLayout.BLANK);
+
+  if (existingSlides.length > 0) {
+    existingSlides[0].remove();
+  }
+
+  const qrBlob = createQrCodeBlob_(publishedUrl);
+  const pageWidth = presentation.getPageWidth();
+  const pageHeight = presentation.getPageHeight();
+  const qrSize = Math.min(pageWidth, pageHeight) * 0.6;
+  const left = (pageWidth - qrSize) / 2;
+  const top = (pageHeight - qrSize) / 2;
+
+  blankSlide.insertImage(qrBlob, left, top, qrSize, qrSize);
+
+  return presentation.getUrl();
+}
+
+/**
+ * Generates a QR code image blob for the given URL.
+ * @param url Published form URL.
+ * @returns PNG blob for the QR code.
+ */
+function createQrCodeBlob_(url: string): GoogleAppsScript.Base.Blob {
+  const encodedUrl = encodeURIComponent(url);
+  const qrUrl = `https://chart.googleapis.com/chart?chs=${DEFAULT_QR_CODE_SIZE}x${DEFAULT_QR_CODE_SIZE}&cht=qr&chl=${encodedUrl}`;
+  return UrlFetchApp.fetch(qrUrl).getBlob().setName('qr-code.png');
 }
