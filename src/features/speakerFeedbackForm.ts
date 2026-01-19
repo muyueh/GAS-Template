@@ -5,7 +5,7 @@ const OUTPUT_SHEET_NAME = 'Output';
 const DEFAULT_MARKER_TITLE = '[[SPEAKER_BLOCKS]]';
 const DEFAULT_FORM_TITLE = '講者回饋表單';
 const DEFAULT_QUESTION_PREFIX = 'A';
-const DEFAULT_IGNORE_STATUSES = ['skip', '忽略', '不產生', '不處理', 'x'];
+const DEFAULT_IGNORE_STATUSES = ['skip', '忽略', '不產生', '不處理', 'x', '完成', '已完成', 'done', 'completed'];
 
 const DEFAULT_RATING_ROWS = [
   '整體推薦度',
@@ -32,6 +32,7 @@ type SpeakerRow = {
   speakerName: string;
   speakerTopic: string;
   status: string;
+  rowIndex: number;
 };
 
 type SpeakerConfig = {
@@ -77,7 +78,8 @@ export function generateSpeakerFeedbackForm(): void {
     ignoreStatuses: DEFAULT_IGNORE_STATUSES
   };
 
-  const speakerRows = readSpeakerRows_(dataSheet);
+  const speakerData = readSpeakerRows_(dataSheet);
+  const speakerRows = speakerData.rows;
   const filteredSpeakers = speakerRows.filter((row) => shouldIncludeSpeaker_(row, config));
 
   if (filteredSpeakers.length === 0) {
@@ -135,6 +137,13 @@ export function generateSpeakerFeedbackForm(): void {
     createdAt: new Date()
   });
 
+  markSpeakersCompleted_(
+    dataSheet,
+    filteredSpeakers,
+    speakerData.statusColumnIndex,
+    '完成',
+  );
+
   SpreadsheetApp.getUi().alert(
     [
       '✅ 已完成新表單生成',
@@ -163,11 +172,14 @@ export function generateSpeakerFeedbackForm(): void {
  * @param sheet Data sheet.
  * @returns Parsed speaker rows.
  */
-function readSpeakerRows_(sheet: GoogleAppsScript.Spreadsheet.Sheet): SpeakerRow[] {
+function readSpeakerRows_(sheet: GoogleAppsScript.Spreadsheet.Sheet): {
+  rows: SpeakerRow[];
+  statusColumnIndex: number;
+} {
   const lastRow = sheet.getLastRow();
   const lastCol = sheet.getLastColumn();
   if (lastRow < 2) {
-    return [];
+    return { rows: [], statusColumnIndex: 3 };
   }
 
   const header = sheet
@@ -182,12 +194,16 @@ function readSpeakerRows_(sheet: GoogleAppsScript.Spreadsheet.Sheet): SpeakerRow
   const statusIndex = findHeaderIndex_(headerLower, COLUMN_STATUS_CANDIDATES, 3);
 
   const rows = sheet.getRange(2, 1, lastRow - 1, lastCol).getValues();
-  return rows.map((row) => ({
-    formTitle: toText_(row[formTitleIndex], ''),
-    speakerName: toText_(row[speakerNameIndex], ''),
-    speakerTopic: toText_(row[speakerTopicIndex], ''),
-    status: toText_(row[statusIndex], '')
-  }));
+  return {
+    statusColumnIndex: statusIndex,
+    rows: rows.map((row, rowIndex) => ({
+      formTitle: toText_(row[formTitleIndex], ''),
+      speakerName: toText_(row[speakerNameIndex], ''),
+      speakerTopic: toText_(row[speakerTopicIndex], ''),
+      status: toText_(row[statusIndex], ''),
+      rowIndex: rowIndex + 2
+    }))
+  };
 }
 
 /**
@@ -418,6 +434,29 @@ function getOrCreateOutputSheet_(
     return existingSheet;
   }
   return spreadsheet.insertSheet(OUTPUT_SHEET_NAME);
+}
+
+/**
+ * Marks processed speaker rows as completed.
+ * @param sheet Data sheet.
+ * @param rows Speaker rows to update.
+ * @param statusColumnIndex Status column index (0-based).
+ * @param completedLabel Status label to set.
+ */
+function markSpeakersCompleted_(
+  sheet: GoogleAppsScript.Spreadsheet.Sheet,
+  rows: SpeakerRow[],
+  statusColumnIndex: number,
+  completedLabel: string,
+): void {
+  if (rows.length === 0) {
+    return;
+  }
+
+  const statusColumn = statusColumnIndex + 1;
+  rows.forEach((row) => {
+    sheet.getRange(row.rowIndex, statusColumn).setValue(completedLabel);
+  });
 }
 
 /**
