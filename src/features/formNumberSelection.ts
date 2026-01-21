@@ -3,12 +3,20 @@
  * FORM_ID：你的 Google Form ID（網址 /d/{ID}/edit 這段）
  * NUMBER_QUESTION_TITLE：表單裡「選號碼」那題的題目標題（要跟回覆表欄位標題一致）
  */
+/**
+ * Runtime configuration for the form number selector.
+ */
 const CONFIG = {
   FORM_ID: 'PASTE_YOUR_FORM_ID_HERE',
   NUMBER_QUESTION_TITLE: '你的號碼', // 例： "號碼" / "Number" / "1~1000 號"
   RESPONSE_SHEET_NAME: '' // 可留空：自動找含有該欄位標題的工作表；或填 "表單回應 1"
 };
 
+/**
+ * Handles Google Forms submissions to enforce unique number selection.
+ * @param e Apps Script form submit event.
+ * @returns Nothing.
+ */
 export function onFormSubmit(e: GoogleAppsScript.Events.FormsOnFormSubmit): void {
   if (!e || !e.namedValues) {
     return;
@@ -51,10 +59,21 @@ export function onFormSubmit(e: GoogleAppsScript.Events.FormsOnFormSubmit): void
 
 /** ========== helpers ========== */
 
+/**
+ * Normalizes a value into a trimmed string.
+ * @param value Raw value from the form or sheet.
+ * @returns Normalized string value.
+ */
 function normalizeValue_(value: unknown): string {
   return value === null || value === undefined ? '' : String(value).trim();
 }
 
+/**
+ * Finds a response sheet by matching header names when no sheet name is provided.
+ * @param ss Active spreadsheet.
+ * @param headerName Column header to find.
+ * @returns Matching response sheet or null.
+ */
 function guessResponseSheet_(
   ss: GoogleAppsScript.Spreadsheet.Spreadsheet,
   headerName: string
@@ -75,6 +94,13 @@ function guessResponseSheet_(
   return null;
 }
 
+/**
+ * Checks whether the selected number appeared in earlier form responses.
+ * @param sheet Response sheet.
+ * @param headerName Column header to scan.
+ * @param value Selected number value.
+ * @returns True when the value already exists in earlier rows.
+ */
 function isDuplicateInEarlierRows_(
   sheet: GoogleAppsScript.Spreadsheet.Sheet,
   headerName: string,
@@ -106,6 +132,13 @@ function isDuplicateInEarlierRows_(
   return false;
 }
 
+/**
+ * Removes the selected option from the form choice list.
+ * @param formId Google Form ID.
+ * @param questionTitle Target question title.
+ * @param picked Selected value to remove.
+ * @returns Nothing.
+ */
 function removeChoiceFromForm_(formId: string, questionTitle: string, picked: string): void {
   const form = FormApp.openById(formId);
   const item = findChoiceItemByTitle_(form, questionTitle);
@@ -124,6 +157,12 @@ function removeChoiceFromForm_(formId: string, questionTitle: string, picked: st
   item.setChoices(filtered);
 }
 
+/**
+ * Finds a list or multiple-choice item by its title.
+ * @param form Google Form instance.
+ * @param title Question title to match.
+ * @returns The list/multiple-choice item if found, otherwise null.
+ */
 function findChoiceItemByTitle_(
   form: GoogleAppsScript.Forms.Form,
   title: string
