@@ -16,6 +16,9 @@ const entrypointWrappers = [
   'function generateSpeakerFeedbackForm() {',
   '  return globalThis.__GAS_TEMPLATE__.generateSpeakerFeedbackForm();',
   '}',
+  'function onFormSubmit(e) {',
+  '  return globalThis.__GAS_TEMPLATE__.onFormSubmit(e);',
+  '}',
   ''
 ].join('\n');
 

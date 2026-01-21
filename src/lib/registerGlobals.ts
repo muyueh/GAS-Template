@@ -1,9 +1,11 @@
 import { onOpen } from '../features/sheetsMenu';
 import { generateSpeakerFeedbackForm } from '../features/speakerFeedbackForm';
+import { onFormSubmit } from '../features/formNumberSelection';
 
 type Entrypoints = {
   onOpen: typeof onOpen;
   generateSpeakerFeedbackForm: typeof generateSpeakerFeedbackForm;
+  onFormSubmit: typeof onFormSubmit;
 };
 
 type GlobalScope = typeof globalThis & {
@@ -24,6 +26,7 @@ export function registerGlobalFunctions(): void {
 
   namespace.onOpen = onOpen;
   namespace.generateSpeakerFeedbackForm = generateSpeakerFeedbackForm;
+  namespace.onFormSubmit = onFormSubmit;
 
   g.__GAS_TEMPLATE__ = namespace;
   // Add your own exports here, e.g.:
