@@ -55,6 +55,10 @@ If you touched either:
 
 You must do a Reference Check (offline docs under `shared/google-apps-script-api-reference/`) and record it in PR body under `## Reference Check`.
 
+### 5) Every scenario has a checklist — you must read and execute it
+
+Each scenario includes a **✅ Agent Checklist**. Before proceeding, ensure you have read the scenario instructions and completed the checklist items for that scenario.
+
 ---
 
 ## Scenario index (playbooks)
