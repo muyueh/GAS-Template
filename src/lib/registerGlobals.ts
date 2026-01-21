@@ -1,13 +1,5 @@
-import { onOpen } from '../features/sheetsMenu';
-import { generateSpeakerFeedbackForm } from '../features/speakerFeedbackForm';
-
-type Entrypoints = {
-  onOpen: typeof onOpen;
-  generateSpeakerFeedbackForm: typeof generateSpeakerFeedbackForm;
-};
-
 type GlobalScope = typeof globalThis & {
-  __GAS_TEMPLATE__?: Partial<Entrypoints>;
+  __GAS_TEMPLATE__?: Record<string, unknown>;
 };
 
 /**
@@ -21,9 +13,6 @@ type GlobalScope = typeof globalThis & {
 export function registerGlobalFunctions(): void {
   const g = globalThis as GlobalScope;
   const namespace = g.__GAS_TEMPLATE__ ?? {};
-
-  namespace.onOpen = onOpen;
-  namespace.generateSpeakerFeedbackForm = generateSpeakerFeedbackForm;
 
   g.__GAS_TEMPLATE__ = namespace;
   // Add your own exports here, e.g.:

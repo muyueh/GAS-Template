@@ -10,12 +10,6 @@ const entrypointWrappers = [
   ' * Apps Script entrypoints (top-level wrappers).',
   ' * 這些必須是全域 function 宣告，Apps Script 才能發現/呼叫。',
   ' */',
-  'function onOpen(e) {',
-  '  return globalThis.__GAS_TEMPLATE__.onOpen(e);',
-  '}',
-  'function generateSpeakerFeedbackForm() {',
-  '  return globalThis.__GAS_TEMPLATE__.generateSpeakerFeedbackForm();',
-  '}',
   ''
 ].join('\n');
 
